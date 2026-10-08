@@ -13,7 +13,7 @@ test('health and chains', async () => {
   const app = buildApp({ client: makeClient(scriptedFetch([])), version: '9.9.9' });
   assert.deepEqual((await app.inject('/health')).json(), { ok: true, version: '9.9.9' });
   const chains = (await app.inject('/api/chains')).json().chains.map((c) => `${c.key}:${c.chainId}`);
-  assert.deepEqual(chains, ['eth:1', 'base:8453', 'arbitrum:42161']);
+  assert.deepEqual(chains, ['eth:1', 'base:8453', 'arbitrum:42161', 'robinhood:4663']);
 });
 
 test('token: holders with shares, chain block, explorer link base', async () => {
@@ -27,6 +27,15 @@ test('token: holders with shares, chain block, explorer link base', async () => 
   assert.equal(body.token.symbol, 'B');
   assert.equal(body.holders[0].share, 50);
   assert.ok(f.seen.every((u) => u.pathname.startsWith('/8453/')));
+});
+
+test('token: robinhood reads chain 4663 and links its own explorer', async () => {
+  const f = scriptedFetch(routes());
+  const app = buildApp({ client: makeClient(f), version: 't' });
+  const body = (await app.inject(`/api/token/robinhood/${TOKEN}`)).json();
+  assert.equal(body.chain.chainId, 4663);
+  assert.equal(body.chain.explorer, 'https://robinhoodchain.blockscout.com');
+  assert.ok(f.seen.every((u) => u.pathname.startsWith('/4663/')));
 });
 
 test('token: second request is served from cache', async () => {

@@ -36,6 +36,7 @@ Every address in the UI links to the chain's Blockscout explorer.
 | Ethereum | 1 | eth.blockscout.com |
 | Base | 8453 | base.blockscout.com |
 | Arbitrum One | 42161 | arbitrum.blockscout.com |
+| Robinhood Chain | 4663 | robinhoodchain.blockscout.com |
 
 One key covers all of them through Blockscout's multichain gateway; adding a
 chain is one line in `src/chains.ts`.
@@ -55,7 +56,7 @@ chain is one line in `src/chains.ts`.
 ## API
 
 ```
-GET /health                          {"ok":true,"version":"0.1.0"}
+GET /health                          {"ok":true,"version":"0.2.0"}
 GET /api/chains                      supported chains
 GET /api/token/:chain/:address       token + top holders with % of supply
 ```
