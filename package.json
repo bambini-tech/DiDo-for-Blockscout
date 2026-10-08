@@ -1,0 +1,23 @@
+{
+  "name": "dido-for-blockscout",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DiDo for Blockscout: a token's holder map and wallet clusters, built entirely on the Blockscout PRO API.",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "tsc -p tsconfig.json && node --test --test-concurrency=1 test/*.test.mjs"
+  },
+  "dependencies": {
+    "fastify": "5.12.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
