@@ -70,3 +70,57 @@ test('token: bad input, unknown token and outage each get their own answer', asy
   assert.equal(r502.statusCode, 502);
   assert.equal(r502.json().error, 'blockscout_unavailable');
 });
+
+test('clusters: holders + deployer + traces + sender counts, end to end', async () => {
+  const H = (c) => '0x' + c.repeat(40);
+  const [h1, h2, h3, pool, s, d] = [H('1'), H('2'), H('3'), H('4'), H('e'), H('d')];
+  const txOf = {
+    [h1]: [{ from: s, to: h1, value: '5', blockNumber: '10', timeStamp: '1000', isError: '0' }],
+    [h2]: [{ from: s, to: h2, value: '6', blockNumber: '20', timeStamp: '90000', isError: '0' }],
+    [h3]: [{ from: d, to: h3, value: '7', blockNumber: '30', timeStamp: '1', isError: '0' }],
+  };
+  const f = scriptedFetch([
+    [(u) => u.pathname === '/v2/api', (u) => json({ status: '1', message: 'OK', result: txOf[u.searchParams.get('address')] ?? [] })],
+    [(u) => u.pathname.endsWith('/holders'), json({ items: [
+      { value: '40', address: { hash: pool, is_contract: true, name: 'Uniswap V2: Pair' } },
+      { value: '30', address: { hash: h1 } },
+      { value: '20', address: { hash: h2 } },
+      { value: '10', address: { hash: h3 } },
+    ], next_page_params: null })],
+    ['/counters', json({ transactions_count: '12' })],
+    [`/addresses/${TOKEN}`, json({ creator_address_hash: d })],
+    [`/tokens/${TOKEN}`, json({ address_hash: TOKEN, decimals: '0', total_supply: '100', holders_count: '4', symbol: 'B' })],
+  ]);
+  const app = buildApp({ client: makeClient(f), version: 't' });
+  const res = await app.inject(`/api/clusters/base/${TOKEN}`);
+  assert.equal(res.statusCode, 200);
+  const body = res.json();
+  assert.equal(body.deployer.address, d);
+  assert.deepEqual(body.analysis.clusters, [{ id: 1, members: [h1, h2], share: 50, reasons: ['shared funder'] }]);
+  assert.equal(body.analysis.wallets[h3].deployerFunded, true);
+  assert.equal(body.analysis.wallets[pool].trace, 'skipped', 'named pool is not traced');
+  assert.equal(body.analysis.stats.deployerLinkedShare, 10);
+  assert.equal(body.holders.length, 4, 'the token payload rides along for the map');
+  const traced = f.seen.filter((u) => u.searchParams.get('action') === 'txlist').map((u) => u.searchParams.get('address'));
+  assert.deepEqual(traced.sort(), [h1, h2, h3]);
+  assert.ok(f.seen.some((u) => u.pathname === `/8453/api/v2/addresses/${s}/counters`), 'the shared sender is checked');
+  assert.equal(body.calls, f.seen.length);
+
+  const again = await app.inject(`/api/clusters/base/${TOKEN}`);
+  assert.equal(again.headers['x-cache'], 'hit');
+});
+
+test('clusters: a failed trace is reported and the result is not cached', async () => {
+  const H = (c) => '0x' + c.repeat(40);
+  const f = scriptedFetch([
+    [(u) => u.pathname === '/v2/api', json({}, 503)],
+    [(u) => u.pathname.endsWith('/holders'), json({ items: [{ value: '1', address: { hash: H('1') } }], next_page_params: null })],
+    [`/addresses/${TOKEN}`, json({ creator_address_hash: null })],
+    [`/tokens/${TOKEN}`, json({ address_hash: TOKEN, decimals: '0', total_supply: '1' })],
+  ]);
+  const app = buildApp({ client: makeClient(f), version: 't' });
+  const body = (await app.inject(`/api/clusters/eth/${TOKEN}`)).json();
+  assert.equal(body.analysis.stats.failed, 1);
+  assert.equal(body.analysis.wallets[H('1')].trace, 'error');
+  assert.equal((await app.inject(`/api/clusters/eth/${TOKEN}`)).headers['x-cache'], 'miss');
+});

@@ -13,9 +13,8 @@ by the team behind [DigitalDon](https://digitaldon.net). DiDo is DigitalDon's
 holder-map terminal; this repository is a stand-alone, open version of it,
 written from scratch on Blockscout.
 
-> Status: **Sprint 1, in progress.** The service and the Blockscout client are
-> in place; funder tracing, clustering and the map land over the sprint (see
-> [Roadmap](#roadmap)).
+> Status: **Sprint 1, in progress.** The Blockscout client, funder tracing and
+> wallet clustering work; the map lands next (see [Roadmap](#roadmap)).
 
 ## How it uses Blockscout
 
@@ -23,9 +22,9 @@ written from scratch on Blockscout.
 |---|---|
 | Token name, decimals, supply, holder count | `GET /{chainId}/api/v2/tokens/{address}` |
 | Top holders, with names and public tags | `GET /{chainId}/api/v2/tokens/{address}/holders` (keyset pages) |
-| Who deployed the token *(next)* | `GET /{chainId}/api/v2/addresses/{address}` → `creator_address_hash` |
-| Who funded each holder *(next)* | `GET /v2/api?module=account&action=txlist` and `txlistinternal`, oldest first |
-| Whether a funder is infrastructure *(next)* | `GET /{chainId}/api/v2/addresses/{address}/counters` |
+| Who deployed the token | `GET /{chainId}/api/v2/addresses/{address}` → `creator_address_hash` |
+| Who funded each holder, and every wallet it traded coin with | `GET /v2/api?module=account&action=txlist` (and `txlistinternal` when no plain transfer funded it), oldest first |
+| Whether a shared funder is infrastructure | `GET /{chainId}/api/v2/addresses/{address}/counters` |
 
 Every address in the UI links to the chain's Blockscout explorer.
 
@@ -53,15 +52,56 @@ chain is one line in `src/chains.ts`.
   produce different answers all the way to the UI, so DiDo never shows an
   empty map when the truth is "we don't know".
 
+## How wallets get linked
+
+For the top 50 holders, DiDo reads each wallet's **oldest** 20 transactions
+from Blockscout: where its first coin came from, and every wallet it
+exchanged native coin with early on. Then it links holders, strongest
+evidence first:
+
+| Link | Meaning |
+|---|---|
+| **direct transfer** | one holder sent native coin straight to another |
+| **funded by deployer** | the token's deployer paid this holder |
+| **shared funder** | both were paid by the same wallet, and that wallet is not infrastructure |
+| **same block** | one sender paid them in the same block (a batch) |
+| **identical amounts** | one sender paid 3+ of them the exact same amount, to the wei |
+| **funded together** | one sender paid 3+ of them within 5 minutes |
+
+Two rules keep the map honest:
+
+- **Infrastructure doesn't link.** Half a chain is funded by the same
+  exchange or bridge, so "both came from Coinbase" proves nothing. A sender
+  with 2,000+ lifetime transactions (from Blockscout's counters) is treated as
+  infrastructure and shares no cluster, unless it paid them in one block, in
+  identical amounts, or minutes apart: that is a batch someone sent. A sender
+  whose count can't be read is not linked on either.
+- **Some holders never link on coin flows.** Named contracts (pools, routers,
+  lockers) and *sinks* (wallets paid by 8+ different senders: deposit
+  addresses, treasuries) would wire unrelated people together.
+
+A wallet's first transaction counterparty is shown when nothing else funded
+it, but never used as a link. Each cluster lists every kind of link that
+holds it together, and the response says how many traces failed, so an
+outage never reads as "no clusters".
+
 ## API
 
 ```
-GET /health                          {"ok":true,"version":"0.2.0"}
+GET /health                          {"ok":true,"version":"0.3.0"}
 GET /api/chains                      supported chains
 GET /api/token/:chain/:address       token + top holders with % of supply
+GET /api/clusters/:chain/:address    the above + deployer, every holder's funder,
+                                     clusters, links and summary stats
 ```
 
-`/api/token` answers `400` for an unknown chain or malformed address, `404`
+A cold `/api/clusters` costs roughly 60-120 Blockscout requests (one or two
+per holder plus one per shared sender), about 15-30 seconds behind the rate
+gate. Funding traces are cached per wallet and shared across tokens, and a
+finished analysis is cached for 10 minutes; the response reports how many
+requests it cost.
+
+Both answer `400` for an unknown chain or malformed address, `404`
 when Blockscout has never seen the token on that chain, and `502` when
 Blockscout could not be read.
 
@@ -89,9 +129,9 @@ npm test
 **Sprint 1 (MVP, Oct 8-21)**
 - [x] Service skeleton, Blockscout PRO client (rate gate, retries, honest empty states)
 - [x] Token + top holders endpoint, cached
-- [ ] Funder tracing for every holder (first inbound transfer, internal transfers)
-- [ ] Deployer detection and deployer-funded holders
-- [ ] Clusters: shared funder, same-block / same-amount funding, holder-to-holder transfers
+- [x] Funder tracing for every holder (first inbound transfer, internal transfers)
+- [x] Deployer detection and deployer-funded holders
+- [x] Clusters: shared funder, same-block / same-amount / same-minutes funding, holder-to-holder transfers
 - [ ] The holder map: bubbles sized by share, linked by cluster, every address one click from Blockscout
 - [ ] Live deployment and demo
 
