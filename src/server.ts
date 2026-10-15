@@ -49,11 +49,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   });
   const service = new Service(opts.client, opts.service);
 
-  app.get('/health', async () => ({
-    ok: true,
-    version: opts.version,
-    ...(opts.client.ledger ? { blockscout: { ...opts.client.ledger.stats(), requests: opts.client.calls } } : {}),
-  }));
+
   if (opts.webDir) registerWeb(app, { dir: opts.webDir, version: opts.version, holderIntel: opts.holderIntel ?? true });
   const mapped = new MappedLog();
   let board: BoardKeeper | undefined;
@@ -66,6 +62,12 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     board.start(b.firstDelayMs ?? 5_000);
     app.addHook('onClose', async () => board?.stop());
   }
+  app.get('/health', async () => ({
+    ok: true,
+    version: opts.version,
+    ...(opts.client.ledger ? { blockscout: { ...opts.client.ledger.stats(), requests: opts.client.calls } } : {}),
+    board: board ? board.status() : { ready: false, enabled: false },
+  }));
   registerIntel(app, service, {
     ...(board ? { board } : {}),
     client: opts.client,
