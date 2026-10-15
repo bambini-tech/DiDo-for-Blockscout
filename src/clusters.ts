@@ -10,7 +10,9 @@
  *   shared funder       two holders took native coin from the same sender,
  *                       and that sender is not infrastructure
  *   same block          one sender funded them in the same block
- *   identical amounts   one sender funded them with the exact same wei amount
+ *   identical amounts   one sender funded them with the exact same wei amount,
+ *                       and not a round one (0.01 ETH from an exchange is what
+ *                       thousands of strangers withdraw; 0.0137264 ETH is not)
  *   funded together     one sender funded them within a few minutes
  *
  * The last three hold even when the sender IS infrastructure (an exchange, a
@@ -295,7 +297,7 @@ function fingerprints(per: Map<string, Flow[]>, opt: LinkOptions): Array<[Reason
     for (const g of groups.values()) if (g.size >= Math.max(2, min)) out.push([reason, [...g].sort()]);
   };
   bucket((f) => (f.block === null ? null : String(f.block)), 'same block', opt.sameBlockMin);
-  bucket((f) => f.value, 'identical amounts', opt.sameAmountMin);
+  bucket((f) => (isRound(f.value) ? null : f.value), 'identical amounts', opt.sameAmountMin);
 
   // Time windows are anchored on their first event and never chained, so a
   // sender paying strangers all day gives many small groups, not one big one.
@@ -337,6 +339,15 @@ class UnionFind {
     const ra = this.find(a);
     const rb = this.find(b);
     if (ra !== rb) this.parent.set(ra < rb ? rb : ra, ra < rb ? ra : rb);
+  }
+}
+
+/** Whole multiples of 0.0001 of the native coin (10^14 wei) are round. */
+export function isRound(wei: string): boolean {
+  try {
+    return BigInt(wei) % 100_000_000_000_000n === 0n;
+  } catch {
+    return false;
   }
 }
 

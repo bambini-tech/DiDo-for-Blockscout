@@ -5,6 +5,8 @@ export interface Config {
   port: number;
   rps: number;
   version: string;
+  /** Blockscout PRO API base; override only to test against a stand-in. */
+  baseUrl: string;
 }
 
 function readVersion(): string {
@@ -22,5 +24,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: Number(env.PORT ?? 3000),
     rps: Number.isFinite(rps) && rps > 0 ? rps : 4.5,
     version: readVersion(),
+    baseUrl: (env.BLOCKSCOUT_BASE_URL ?? 'https://api.blockscout.com').trim() || 'https://api.blockscout.com',
   };
 }

@@ -4941,7 +4941,7 @@
       const h = WATCH.horizon;
       const rows = WATCH.items.map(it => ({ it, sig: WATCH.signal(it, h) }))
         .sort((a, b) => (ORDER[a.sig.k] - ORDER[b.sig.k]) || ((b.sig.profit == null ? -9 : b.sig.profit) - (a.sig.profit == null ? -9 : a.sig.profit)) || (b.it.addedAt - a.it.addedAt));
-      if (!rows.length) return hint("press <kbd>s</kbd> on a token to watch it: it lands here, sorted by what to do now. the same list as the Web Analyzer's.", 'is-intro');
+      if (!rows.length) return hint("press <kbd>s</kbd> on a token to watch it: it lands here, sorted by what to do now. kept in this browser only.", 'is-intro');
       const more = rows.length > SHOW ? `<button type="button" class="dd-strip__more mono" data-wl>+${rows.length - SHOW} more</button>` : '';
       return rows.slice(0, SHOW).map(({ it, sig }) => cap(it, { cls: 'is-watch', px: WATCH.livePrice(it), mark: sig.k, sub: sig.word, aria: sig.word })).join('') + more;
     }
@@ -4980,7 +4980,7 @@
         const all = (board.doc ? allRows().concat(board.doc.hot) : []).concat(trend.tokens);
         all.forEach(t => { const k = keyOf(t.chain, t.address); if (!shows(t) && !seen.has(k)) { seen.add(k); off++; } });
       }
-      return `<div class="dd-chains" role="group" aria-label="chains the board, running hot and the groups' calls show">
+      return `<div class="dd-chains" role="group" aria-label="chains the mapped-here shelf shows">
         <span class="dd-chains__k mono">chains</span>
         <button type="button" class="dd-chip" data-chains="all" aria-pressed="${!hidden.size}">all</button>
         ${CHAIN_LIST.filter(c => NON_EVM.has(c)).map(chip).join('')}

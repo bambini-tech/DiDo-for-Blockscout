@@ -15,7 +15,7 @@ if (!config.apiKey) {
   console.warn('BLOCKSCOUT_API_KEY is not set: the page and chart run, the holder map and wallet scans do not. See .env.example.');
 }
 
-const client = new BlockscoutClient({ apiKey: config.apiKey, rps: config.rps });
+const client = new BlockscoutClient({ apiKey: config.apiKey, rps: config.rps, baseUrl: config.baseUrl });
 const app = buildApp({
   client,
   version: config.version,

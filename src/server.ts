@@ -5,6 +5,7 @@ import { Service, type Reply, type ServiceOptions } from './service.js';
 import { registerWeb } from './web.js';
 import { registerIntel } from './intel-routes.js';
 import { MappedLog } from './mapped.js';
+import { tintOf } from './tint.js';
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
@@ -19,6 +20,8 @@ export interface AppOptions {
   holderIntel?: boolean;
   /** Uncached cluster scans per IP per minute. */
   scansPerMinute?: number;
+  /** Fetch used for token logos (tests pass a stub). */
+  fetchImage?: typeof fetch;
 }
 
 export function buildApp(opts: AppOptions): FastifyInstance {
@@ -29,9 +32,17 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   if (opts.webDir) registerWeb(app, { dir: opts.webDir, version: opts.version, holderIntel: opts.holderIntel ?? true });
   const mapped = new MappedLog();
   registerIntel(app, service, {
+    client: opts.client,
     configured: opts.holderIntel ?? true,
     ...(opts.scansPerMinute !== undefined ? { scansPerMinute: opts.scansPerMinute } : {}),
     onMapped: (chain, token, symbol, name, price) => mapped.record(chain, token, symbol, name, price),
+  });
+  app.get('/api/token-tint', async (req, reply) => {
+    const u = String((req.query as Record<string, string>).u ?? '');
+    const t = await tintOf(u, opts.fetchImage);
+    reply.header('Cache-Control', t ? 'public, max-age=86400' : 'no-store');
+    // No colours (or a logo we will not fetch) is an answer: the page keeps its plain light.
+    return { ok: true, error: null, data: t ?? { colors: [] } };
   });
   app.get('/api/most-scanned', async () => ({ ok: true, error: null, data: { window_h: 24, tokens: mapped.top() } }));
 

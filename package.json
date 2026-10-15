@@ -11,7 +11,8 @@
     "test": "npm run build && node --test --test-concurrency=1 test/*.test.mjs"
   },
   "dependencies": {
-    "fastify": "5.12.5"
+    "fastify": "5.12.5",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

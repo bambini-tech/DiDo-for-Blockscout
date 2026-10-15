@@ -12,6 +12,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { chainByKey, type Chain } from './chains.js';
 import type { Service } from './service.js';
 import { basePayload, fullPayload } from './holders.js';
+import { scanWallet } from './wallet.js';
+import type { BlockscoutClient } from './blockscout/client.js';
+import { TtlCache } from './cache.js';
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
@@ -19,6 +22,9 @@ export interface IntelOptions {
   configured: boolean;
   /** Uncached full scans per IP per minute; cache hits are free. */
   scansPerMinute?: number;
+  /** Uncached wallet scans per IP per minute. */
+  walletScansPerMinute?: number;
+  client: BlockscoutClient;
   onMapped?: (chain: Chain, token: string, symbol: string | null, name: string | null, priceUsd: number | null) => void;
 }
 
@@ -71,6 +77,33 @@ export function registerIntel(app: FastifyInstance, service: Service, opts: Inte
   });
 
   app.get('/api/board', async (_req, reply) => fail(reply, 'feature_disabled'));
+
+  // The wallet journey: one wallet across every chain. `defer` and `/pnl` are
+  // accepted for the page's sake; this edition computes no cost basis.
+  const walletLimit = new IpLimiter(opts.walletScansPerMinute ?? 10, 60_000);
+  const wallets = new TtlCache<Awaited<ReturnType<typeof scanWallet>>>(2 * 60_000, 500);
+  const walletInflight = new Map<string, ReturnType<typeof scanWallet>>();
+  const walletScan = async (req: FastifyRequest, reply: FastifyReply) => {
+    const address = String((req.query as Record<string, string>).address ?? '').trim().toLowerCase();
+    if (!ADDRESS.test(address)) return reply.code(400).send({ ok: false, error: 'invalid_address', detail: 'that is not an EVM address.', data: null });
+    if (!opts.configured) return fail(reply, 'not_configured');
+    const hit = wallets.get(address);
+    if (hit) return ok(reply, hit);
+    let job = walletInflight.get(address);
+    if (!job) {
+      if (!walletLimit.take(req.ip)) return fail(reply, 'rate_limited');
+      job = scanWallet(opts.client, address).finally(() => walletInflight.delete(address));
+      walletInflight.set(address, job);
+    }
+    const data = await job;
+    if (data.failed_chains.length === data.chains.length + data.empty_chains.length + data.failed_chains.length) {
+      return reply.code(502).send({ ok: false, error: 'internal', detail: 'Blockscout could not be read on any chain right now.', data: null });
+    }
+    if (!data.failed_chains.length) wallets.set(address, data);
+    return ok(reply, data);
+  };
+  app.get('/api/wallet-scan', walletScan);
+  app.get('/api/wallet-scan/pnl', walletScan);
 }
 
 /** A fixed-window counter per IP. */

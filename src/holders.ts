@@ -119,7 +119,10 @@ export function fullPayload(c: ClusterResponse, pair?: string | null) {
     };
   });
 
-  const links = a.links
+  // One line per pair on the map, of its strongest kind.
+  const RANK: Record<string, number> = { transfer: 0, funder: 1, shared_funder: 2 };
+  const byPair = new Map<string, { source: string; target: string; kind: string }>();
+  for (const l of a.links
     .filter((l) => drawn.has(l.a) && drawn.has(l.b))
     .map((l) => {
       if (l.reason === 'direct transfer') return { source: l.a, target: l.b, kind: 'transfer' };
@@ -128,7 +131,12 @@ export function fullPayload(c: ClusterResponse, pair?: string | null) {
         return { source: l.a === deployer ? l.b : l.a, target: deployer, kind: 'funder' };
       }
       return { source: l.a, target: l.b, kind: 'shared_funder' };
-    });
+    })) {
+    const key = [l.source, l.target].sort().join('|');
+    const prev = byPair.get(key);
+    if (!prev || RANK[l.kind]! < RANK[prev.kind]!) byPair.set(key, l);
+  }
+  const links = [...byPair.values()];
 
   const sumPct = (pred: (o: Owner) => boolean) => round(owners.filter(pred).reduce((s, o) => s + o.pct, 0), 1);
   const has = (r: string) => (o: Owner) => Boolean(o.roles?.includes(r));
