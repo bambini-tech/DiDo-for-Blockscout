@@ -62,7 +62,7 @@ gate for the whole process, retries on 429/5xx, and an honest
 | Launch: bundles and snipers | `GET /v2/api?module=logs&action=getLogs` (Transfer events from the creation block) |
 | Who funded each holder, and every wallet it traded coin with | `GET /v2/api?module=account&action=txlist` (and `txlistinternal` when no plain transfer funded it), oldest first |
 | Whether a shared funder is infrastructure | `GET /{chainId}/api/v2/addresses/{funder}/counters` |
-| Which chains a wallet is on, in one request | `GET /multichain/api/v1/addresses?q={wallet}&chain_id=1,8453,...` (the multichain aggregator) |
+| Which chains a wallet is on, in one request | `GET /multichain/api/v1/clusters/multichain/addresses/{wallet}` (the multichain aggregator's `chain_infos`; the chains it covers from `/clusters/multichain/chains`) |
 | A wallet's native balance, ENS, name and tags | `GET /{chainId}/api/v2/addresses/{wallet}` |
 | A wallet's tokens and their USD value | `GET /{chainId}/api/v2/addresses/{wallet}/token-balances` |
 | A wallet's transaction count | `GET /{chainId}/api/v2/addresses/{wallet}/counters` |
@@ -153,7 +153,8 @@ second, 100k credits a day, 50 holders traced instead of 100).
   the month (~6.4M credits), new requests are refused until midnight and the
   page says the data is unavailable -- never that a token has no holders.
   `/health` shows today's credits, and requests and credits per route
-  (`routes_today`), so the spend can be read rather than guessed.
+  (`routes_today`), so the spend can be read rather than guessed, and the
+  entry board's state (`board`: ready, reading, last read, last error).
 
 | What | Requests | Credits |
 |---|---|---|
@@ -168,12 +169,11 @@ On 100M credits that is roughly 25,000 first-look maps or 200,000 wallet
 scans a month.
 
 **The wallet scan asks Blockscout's multichain aggregator first.** One
-request says which chains the wallet exists on; only those are read. The
-aggregator refuses a request naming a chain it does not index, so where its
-chain list can be read (once a day) it is asked only about those, and any of
-DiDo's chains it does not index are still probed directly; where it cannot,
-it is asked about all of them (it indexes every chain DiDo lists today). If
-the lookup fails, every chain is probed: a wallet is never thinner for it. The answer
+request says which chains the wallet exists on; only those are read. DiDo
+reads the aggregator's `multichain` cluster, which covers 14 of its 17
+chains (read once a day); the other three (Flow EVM, MegaETH, Robinhood
+Chain today) are probed directly. If the aggregator cannot be read, every
+chain is probed: a wallet is never thinner for it. The answer
 says which way it went (`discovery`). A chain where Blockscout reports no
 token at all (`has_tokens: false`) costs one request there.
 
@@ -211,8 +211,10 @@ same ones DiDo's start page shows:
 
 Everything read and let go stays in the garden, faint, with the stage and
 the reason. A round reads at most 60 tokens' candles (`BOARD_MAX_READS`) at
-one request every 4 s, so it takes a few minutes; the board shows the last
-round until the next one lands.
+one request every 4 s, so it takes about 15 to 20 minutes; the board shows the
+last round until the next one lands. Rounds run every 4 hours, the first one
+right after the server starts, so after a deploy the start page has no board
+(and no garden) until that first round is in.
 
 ## How wallets get linked
 

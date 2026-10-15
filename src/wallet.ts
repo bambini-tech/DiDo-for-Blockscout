@@ -287,6 +287,7 @@ function withBasis(wallet: string, e: ChainEntry, h: HistoryRead, chains: readon
   }
   else if (h.truncated) notes.push(`history too long to price (>10,000 ${h.truncated})`);
   else {
+    if (h.internalsPending) notes.push(`${e.chain_label}: Blockscout is still indexing internal transactions here, so a sale paid in ${e.native_symbol} may show no cost basis yet`);
     const wrapped = chains.find((c) => c.key === e.chain)?.wrapped ?? null;
     pnl = attachPnl(wallet, holdings as Array<{ address: string; amount: number; usd: number; pnl: HoldingPnl | null }>, h, wrapped, e.native.price_usd ?? 0);
   }
@@ -425,17 +426,11 @@ type PlanInfo =
 async function planChains(client: BlockscoutClient, address: string, chains: readonly Chain[], discovery: Discovery): Promise<{ read: Set<number>; info: PlanInfo }> {
   const all = new Set(chains.map((c) => c.chainId));
   if (discovery === 'probe') return { read: all, info: { via: 'probe', probed: all.size } };
-  // Without its chain list (the PRO gateway does not serve that route) every
-  // chain is asked about: the aggregator refuses the whole request if it does
-  // not index one, and a refusal falls back to probing every chain.
-  const indexed = await aggregatorChains(client) ?? all;
-  const listed = indexed !== all;
+  const indexed = await aggregatorChains(client);
+  if (!indexed) return { read: all, info: { via: 'probe', probed: all.size, reason: `aggregator chain list unavailable (${aggregatorError() ?? 'error'})` } };
   const covered = chains.filter((c) => indexed.has(c.chainId)).map((c) => c.chainId);
   const present = await chainsWithAddress(client, address, covered);
-  if (!present) {
-    const why = [listed ? null : `chain list: ${aggregatorError() ?? 'unavailable'}`, `lookup: ${lookupError() ?? 'failed'}`].filter(Boolean).join('; ');
-    return { read: all, info: { via: 'probe', probed: all.size, reason: `aggregator lookup failed (${why})` } };
-  }
+  if (!present) return { read: all, info: { via: 'probe', probed: all.size, reason: `aggregator lookup failed (${lookupError() ?? 'error'})` } };
   const uncovered = chains.filter((c) => !indexed.has(c.chainId)).map((c) => c.chainId);
   const read = new Set([...present, ...uncovered].filter((id) => all.has(id)));
   return { read, info: { via: 'multichain', found_on: present.size, probed: uncovered.length, skipped: covered.length - present.size } };

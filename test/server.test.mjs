@@ -11,7 +11,7 @@ const routes = () => [
 
 test('health and chains', async () => {
   const app = buildApp({ client: makeClient(scriptedFetch([])), version: '9.9.9' });
-  assert.deepEqual((await app.inject('/health')).json(), { ok: true, version: '9.9.9' });
+  assert.deepEqual((await app.inject('/health')).json(), { ok: true, version: '9.9.9', board: { ready: false, enabled: false } });
   const chains = (await app.inject('/api/chains')).json().chains.map((c) => `${c.key}:${c.chainId}`);
   assert.equal(chains.length, 17);
   for (const c of ['ethereum:1', 'base:8453', 'arbitrum:42161', 'robinhood:4663', 'polygon:137', 'optimism:10', 'scroll:534352']) assert.ok(chains.includes(c), c);

@@ -203,6 +203,8 @@ export interface HistoryRead {
   truncated: string | null;
   /** Why a listing could not be read, in Blockscout's words ("tokentx: HTTP 504"). */
   error: string | null;
+  /** Blockscout has not finished indexing this chain's internal transactions: booked without them. */
+  internalsPending: boolean;
 }
 
 /**
@@ -214,7 +216,13 @@ export async function readHistory(client: BlockscoutClient, chainId: number, wal
   const listing = (action: string) => client.etherscan<HistoryRow[]>(chainId, {
     module: 'account', action, address: wallet, sort: 'asc', page: 1, offset: HISTORY_ROWS,
   });
-  const [txs, internals, transfers] = await Promise.all([listing('txlist'), listing('txlistinternal'), listing('tokentx')]);
+  const [txs, read, transfers] = await Promise.all([listing('txlist'), listing('txlistinternal'), listing('tokentx')]);
+  // "Some internal transactions within this block range have not yet been
+  // processed": the chain's indexer is behind, not the request wrong. The
+  // basis is booked without them (a sale paid in the gas coin then shows no
+  // basis, never a wrong one) and the card says so.
+  const internalsPending = read.status === 'error' && /not yet been processed/i.test(read.detail ?? '');
+  const internals = internalsPending ? { data: [] as HistoryRow[], status: 'ok' as Status } : read;
   const rows = (r: { data: HistoryRow[] | null }) => (Array.isArray(r.data) ? r.data : []);
   const failedAt = ([['txlist', txs], ['txlistinternal', internals], ['tokentx', transfers]] as const).find(([, r]) => r.status === 'error');
   const failed = Boolean(failedAt);
@@ -226,5 +234,6 @@ export async function readHistory(client: BlockscoutClient, chainId: number, wal
     transfers: rows(transfers),
     truncated: named.find(([, r]) => r.length >= HISTORY_ROWS)?.[0] ?? null,
     error: failedAt ? `${failedAt[0]}: ${failedAt[1].detail ?? 'error'}` : null,
+    internalsPending,
   };
 }
