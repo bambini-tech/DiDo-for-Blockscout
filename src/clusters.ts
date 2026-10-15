@@ -105,6 +105,8 @@ export interface WalletInfo {
   /** Fewer than `freshMaxTxs` plain transactions in the wallet's whole history. */
   fresh: boolean;
   trace: 'ok' | 'error' | 'skipped';
+  /** Why a trace failed, in Blockscout's words. */
+  traceError?: string;
   cluster: number | null;
   deployer: boolean;
   deployerFunded: boolean;
@@ -165,6 +167,7 @@ export function linkHolders(input: LinkInput): LinkResult {
       fundTs: funding?.ts ?? null,
       fresh: Boolean(t && t.status === 'ok' && !t.windowFull && t.txCount < opt.freshMaxTxs),
       trace: !t ? 'skipped' : t.status === 'ok' ? 'ok' : 'error',
+      ...(t?.error ? { traceError: t.error } : {}),
       cluster: null,
       deployer: h.address === creator,
       deployerFunded: Boolean(creator && senders.has(creator)),

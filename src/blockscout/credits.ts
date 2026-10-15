@@ -28,7 +28,8 @@ export interface Plan {
 
 export const PLANS: Record<Plan['name'], Plan> = {
   // 90% of the plan's request rate: headroom for jitter, one process, one key.
-  builder: { name: 'builder', rps: 13.5, monthlyCredits: 100_000_000, dailyBrake: Math.floor((100_000_000 / 31) * 2), traceLimit: 100, concurrency: 12 },
+  // In flight: the live API answers in ~2 s, so ~30 at once keep a 13.5/s gate full.
+  builder: { name: 'builder', rps: 13.5, monthlyCredits: 100_000_000, dailyBrake: Math.floor((100_000_000 / 31) * 2), traceLimit: 100, concurrency: 32 },
   free: { name: 'free', rps: 4.5, monthlyCredits: 0, dailyBrake: 90_000, traceLimit: 50, concurrency: 6 },
 };
 
@@ -42,6 +43,8 @@ export class CreditLedger {
   today = 0;
   thisMonth = 0;
   refused = 0;
+  /** Today's requests and credits per route -- where the credits go. */
+  private byRoute = new Map<string, { requests: number; credits: number }>();
 
   constructor(readonly plan: Plan, private readonly now: () => number = Date.now) {}
 
@@ -70,7 +73,7 @@ export class CreditLedger {
   }
 
   /** Charge a request; false when today's brake is reached (the request is not sent). */
-  charge(pathname: string): boolean {
+  charge(pathname: string, label?: string): boolean {
     this.roll();
     const price = this.priceOf(pathname);
     if (this.plan.dailyBrake > 0 && this.today + price > this.plan.dailyBrake) {
@@ -79,6 +82,11 @@ export class CreditLedger {
     }
     this.today += price;
     this.thisMonth += price;
+    const key = routeOf(label ?? pathname);
+    const r = this.byRoute.get(key) ?? { requests: 0, credits: 0 };
+    r.requests++;
+    r.credits += price;
+    this.byRoute.set(key, r);
     return true;
   }
 
@@ -92,6 +100,7 @@ export class CreditLedger {
       daily_brake: this.plan.dailyBrake,
       monthly_allowance: this.plan.monthlyCredits || null,
       refused_today: this.refused,
+      routes_today: Object.fromEntries([...this.byRoute].sort((a, b) => b[1].credits - a[1].credits)),
       since: 'process start (in-memory tallies)',
     };
   }
@@ -104,12 +113,21 @@ export class CreditLedger {
       this.day = day;
       this.today = 0;
       this.refused = 0;
+      this.byRoute.clear();
     }
     if (month !== this.month) {
       this.month = month;
       this.thisMonth = 0;
     }
   }
+}
+
+/** A request's route with its addresses and hashes taken out (and the chain prefix kept as "{chain}"). */
+function routeOf(path: string): string {
+  return path
+    .replace(/^\/\d+\//, '/{chain}/')
+    .replace(/0x[0-9a-fA-F]{64}/g, ':hash')
+    .replace(/0x[0-9a-fA-F]{40}/g, ':address');
 }
 
 export function planNamed(name: string | undefined): Plan {

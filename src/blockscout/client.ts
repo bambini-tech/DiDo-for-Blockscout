@@ -28,6 +28,8 @@ export type Status = 'ok' | 'absent' | 'error';
 export interface Result<T> {
   data: T | null;
   status: Status;
+  /** Why an 'error' is one, in Blockscout's words (an HTTP status or the envelope's message). Never a URL. */
+  detail?: string;
 }
 
 export interface ClientOptions {
@@ -77,13 +79,13 @@ export class BlockscoutClient {
     const url = new URL(`${this.baseUrl}/${chainId}/api/v2/${path.replace(/^\/+/, '')}`);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
     const res = await this.request(url, `REST ${chainId}/${path}`);
-    if (!res) return { data: null, status: 'error' };
+    if (!res) return { data: null, status: 'error', detail: 'no answer' };
     if (res.status === 404) return { data: null, status: 'absent' };
-    if (res.status !== 200) return { data: null, status: 'error' };
+    if (res.status !== 200) return { data: null, status: 'error', detail: `HTTP ${res.status}` };
     try {
       return { data: (await res.json()) as T, status: 'ok' };
     } catch {
-      return { data: null, status: 'error' };
+      return { data: null, status: 'error', detail: 'unreadable answer' };
     }
   }
 
@@ -118,18 +120,21 @@ export class BlockscoutClient {
     url.searchParams.set('chain_id', String(chainId));
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
     const res = await this.request(url, `Etherscan ${chainId}/${params.action ?? '?'}`);
-    if (!res || res.status !== 200) return { data: null, status: 'error' };
+    if (!res) return { data: null, status: 'error', detail: 'no answer' };
+    if (res.status !== 200) return { data: null, status: 'error', detail: `HTTP ${res.status}` };
     let body: { status?: string; message?: string; result?: unknown };
     try {
       body = (await res.json()) as typeof body;
     } catch {
-      return { data: null, status: 'error' };
+      return { data: null, status: 'error', detail: 'unreadable answer' };
     }
     if (String(body.status) === '1') return { data: body.result as T, status: 'ok' };
     if (/no (transactions|records) found/i.test(String(body.message ?? ''))) {
       return { data: [] as unknown as T, status: 'ok' };
     }
-    return { data: null, status: 'error' };
+    const said = [body.message, typeof body.result === 'string' ? body.result : null].filter(Boolean).join(': ');
+    log(`Etherscan ${chainId}/${params.action ?? '?'}: ${said.slice(0, 160) || 'status 0'}`);
+    return { data: null, status: 'error', detail: said.slice(0, 160) || 'status 0' };
   }
 
   private async gate(): Promise<void> {
@@ -141,7 +146,8 @@ export class BlockscoutClient {
 
   private async request(url: URL, context: string): Promise<Response | null> {
     // One charge per logical request; a refused one is an error, never "nothing here".
-    if (this.ledger && !this.ledger.charge(url.pathname)) {
+    const route = url.pathname === '/v2/api' ? `etherscan:${url.searchParams.get('module')}.${url.searchParams.get('action')}` : url.pathname;
+    if (this.ledger && !this.ledger.charge(url.pathname, route)) {
       log(`${context}: not sent -- today's credit brake is reached`);
       return null;
     }

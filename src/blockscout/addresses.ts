@@ -82,6 +82,8 @@ export interface FundingTrace {
   windowFull: boolean;
   /** Every native in/outflow in the window: the wallet's counterparties. */
   flows: Flow[];
+  /** When status is 'error': what Blockscout said. */
+  error?: string;
 }
 
 interface RawTx {
@@ -113,7 +115,7 @@ export async function traceFunding(
   const txs = await client.etherscan<RawTx[]>(chainId, {
     module: 'account', action: 'txlist', address: me, sort: 'asc', page: 1, offset: window,
   });
-  if (txs.status !== 'ok' || !Array.isArray(txs.data)) return { ...out, status: 'error' };
+  if (txs.status !== 'ok' || !Array.isArray(txs.data)) return { ...out, status: 'error', error: `txlist: ${txs.detail ?? 'unreadable'}` };
   const list = txs.data;
   out.firstTs = toNum(list[0]?.timeStamp);
   out.txCount = list.length;
@@ -132,7 +134,7 @@ export async function traceFunding(
   const itxs = await client.etherscan<RawTx[]>(chainId, {
     module: 'account', action: 'txlistinternal', address: me, sort: 'asc', page: 1, offset: window,
   });
-  if (itxs.status !== 'ok' || !Array.isArray(itxs.data)) return { ...out, status: 'error' };
+  if (itxs.status !== 'ok' || !Array.isArray(itxs.data)) return { ...out, status: 'error', error: `txlistinternal: ${itxs.detail ?? 'unreadable'}` };
   for (const tx of itxs.data) {
     if (tx.isError === '1') continue;
     const flow = toFlow(tx, me, true);
