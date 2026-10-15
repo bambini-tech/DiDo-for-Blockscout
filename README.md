@@ -135,7 +135,8 @@ credits a month) and runs on the free plan too (`BLOCKSCOUT_PLAN=free`: 5 a
 second, 100k credits a day, 50 holders traced instead of 100).
 
 - **One rate gate** for the whole process at 90% of the plan's rate (13.5/s),
-  with 12 requests in flight so the gate, not network latency, sets the pace.
+  with up to 32 requests in flight (6 on free) so the gate, not network
+  latency, sets the pace: Blockscout answers a deep read in about two seconds.
 - **Every route DiDo uses is a standard one (20 credits).** Prices come from
   Blockscout's published list (`api.blockscout.com/api/json/config`), read at
   start; each request is charged once, retries included.
@@ -147,12 +148,13 @@ second, 100k credits a day, 50 holders traced instead of 100).
 - **A runaway brake:** once a UTC day has spent twice an even day's share of
   the month (~6.4M credits), new requests are refused until midnight and the
   page says the data is unavailable -- never that a token has no holders.
-  `/health` shows today's credits.
+  `/health` shows today's credits, and requests and credits per route
+  (`routes_today`), so the spend can be read rather than guessed.
 
 | What | Requests | Credits |
 |---|---|---|
 | Holders (the map's first answer) | 3 | 60 |
-| Full map, first look (100 holders traced, launch, deployer, shared funders) | ~130–230 | ~2,600–4,600 |
+| Full map, first look (100 holders traced, launch, deployer, shared funders) | ~130–350 (BRETT on Base: 346) | ~2,600–7,000 |
 | The same token again within 10 minutes | 0 | 0 |
 | Wallet scan (one multichain lookup, then 4 per chain it is on) | ~5–15 | ~100–300 |
 | Wallet scan without the aggregator (`WALLET_DISCOVERY=probe`, or if it is down) | ~20–30 | ~400–600 |
