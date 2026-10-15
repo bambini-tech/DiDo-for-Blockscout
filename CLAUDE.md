@@ -20,11 +20,12 @@ Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page,
 - **Public repo.** Never commit an API key, a `.env`, internal hostnames, or
   anything from DigitalDon's private code that is not meant to be public.
   Write the code here fresh; do not paste the private bot's source.
-- **Blockscout is the only server-side data source.** Judging weights the
-  Blockscout integration at 30%, and the pitch is "every holder, wallet and
-  token fact comes from Blockscout". The one exception is the price chart,
-  read in the viewer's browser from DexScreener/GeckoTerminal. Do not add
-  another provider to the server.
+- **Blockscout is the only source of holder, wallet and token facts.**
+  Judging weights the Blockscout integration at 30%. Market data (which
+  tokens move, prices, candles) is the one exception, from DexScreener and
+  GeckoTerminal: in the browser for the chart, on the server only for the
+  entry board (`src/market/`, paced, 429 backoff). Never read holders,
+  wallets or token info anywhere else, and add no other provider.
 - **`web/vendor/` is never edited here.** It is a byte-for-byte snapshot
   (`web/vendor/SOURCE.md`); the build and `test/web.test.mjs` check it.
   Adapt DiDo in `web/src/`, and keep its chain list and explorers in sync
@@ -32,6 +33,9 @@ Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page,
 - **The page has nothing inline** (no inline script, style or `style=`): it
   ships under `script-src 'self'` / `style-src 'self'`.
 - **No trading, no accounts.** This edition is discovery only.
+- **The start page is DiDo's own.** It reads `/api/board` in the bot's
+  board shape (`src/board/read.ts`); keep let-go reasons inside the set the
+  page words (`reasonText` in `web/src/dido.js`).
 - **Never log the API key.** It travels as a query parameter, so never log or
   return a request URL as-is.
 - **"Absent" is not "error".** Keep the client's `ok / absent / error`

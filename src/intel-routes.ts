@@ -15,6 +15,7 @@ import { basePayload, fullPayload } from './holders.js';
 import { scanWallet } from './wallet.js';
 import type { BlockscoutClient } from './blockscout/client.js';
 import { TtlCache } from './cache.js';
+import type { BoardKeeper } from './board/keeper.js';
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
@@ -25,11 +26,13 @@ export interface IntelOptions {
   /** Uncached wallet scans per IP per minute. */
   walletScansPerMinute?: number;
   client: BlockscoutClient;
+  /** The entry board; absent, the page shows no board and no garden. */
+  board?: BoardKeeper;
   onMapped?: (chain: Chain, token: string, symbol: string | null, name: string | null, priceUsd: number | null) => void;
 }
 
 const STATUS: Record<string, number> = {
-  invalid_token: 400, unsupported_chain: 400, token_not_found: 404, rate_limited: 429, not_configured: 503, internal: 502, feature_disabled: 200,
+  invalid_token: 400, unsupported_chain: 400, token_not_found: 404, rate_limited: 429, not_configured: 503, internal: 502, feature_disabled: 200, unavailable: 200,
 };
 
 export function registerIntel(app: FastifyInstance, service: Service, opts: IntelOptions): void {
@@ -76,7 +79,12 @@ export function registerIntel(app: FastifyInstance, service: Service, opts: Inte
     return ok(reply, service.progress(t.chain, t.token));
   });
 
-  app.get('/api/board', async (_req, reply) => fail(reply, 'feature_disabled'));
+  // The page reads 'feature_disabled' / 'unavailable' as "no board to show": no shelf, no garden.
+  app.get('/api/board', async (_req, reply) => {
+    if (!opts.board) return fail(reply, 'feature_disabled');
+    if (!opts.board.doc) return fail(reply, 'unavailable');
+    return ok(reply, opts.board.doc);
+  });
 
   // The wallet journey: one wallet across every chain. `defer` and `/pnl` are
   // accepted for the page's sake; this edition computes no cost basis.

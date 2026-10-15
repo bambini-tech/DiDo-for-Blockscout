@@ -3963,8 +3963,8 @@
   LAYOUT.bind('wal', els.wal, els.wal.querySelector('.dd-pane__hd'), () => true);
 
   /* ---------- the garden ----------
-     The welcome's first screen when the server has an entry board (this
-     edition has none, so it stays dormant): the board read drawn in the holder map's
+     The welcome's first screen when the server has an entry board: the
+     board read drawn in the holder map's
      language, one level up. Every token the read looked at is a bubble --
      the board and the near tier lit, the ones let go faint -- sized by
      liquidity, lit ones placed higher the more room they have to the sell
@@ -4469,9 +4469,10 @@
     /* the groups' board: status 'idle' | 'loading' | 'ok' | 'err' */
     const trend = { status: 'idle', tokens: [], ts: 0 };
     /* The entry board (GET /api/board): tokens the engine reads at their
-       entry with room to the sell level. This edition's server has none and
-       answers 'feature_disabled', so status is 'off' and the shelf is simply
-       not there. 'err' is a server that did not answer, and says so. */
+       entry with room to the sell level, read every 4 h for everyone.
+       status 'off' means the server has none to give yet (the first read
+       is still running, or the board is off): the shelf is simply not
+       there. 'err' is a server that did not answer, and says so. */
     const board = { status: 'idle', doc: null, ts: 0 };
 
     /* The chain filter: which chains the discovery (the board, running hot,
@@ -4631,7 +4632,7 @@
     const trendRows = () => trend.tokens.filter(shows);
     async function refresh() {
       const tasks = [readTrend().then(() => readQuotes(trendRows().slice(0, SHOW))), readQuotes(recent.items.slice(0, SHOW).concat(WATCH.items.slice(0, SHOW))),
-        readBoard().then(() => readQuotes(boardRows().concat(board.doc ? board.doc.hot.filter(shows) : []).concat(board.doc ? [] : introRows())))];
+        readBoard().then(() => readQuotes(boardRows().concat(board.doc ? board.doc.hot.filter(shows) : [])))];
       if (WATCH.items.length) tasks.push(WATCH.refresh());
       await Promise.all(tasks.map(t => t.catch(() => {})));
       if (shown) render();
@@ -4694,7 +4695,7 @@
         foot: `${esc(DD.chainTag(chainOf(r.chain)))} · ${r.lane === 'day' ? 'a day' : 'weeks'} · read ${esc(clock(board.doc.read_at))}`,
       });
     }
-    /* ── the garden over the shelves (dormant without an entry board) ── */
+    /* ── the garden over the shelves ── */
     /* the stage's view (field | cards), remembered per device; the
        pop-overs over its pill; whether the bubbles have risen into a fresh
        field yet (they rise once per arrival, never on a refresh) */
@@ -4989,20 +4990,6 @@
       </div>`;
     }
 
-    /* Without an entry board the stage says what DiDo is and offers tokens to
-       open: the ones mapped here lately, or a few well-known ones to start. */
-    const EXAMPLES = [
-      { chain: 'base', address: '0x532f27101965dd16442E59d40670FaF5eBB142E4', symbol: 'BRETT', name: 'Brett' },
-      { chain: 'ethereum', address: '0x6982508145454Ce325dDbE47a25d4ec3d2311933', symbol: 'PEPE', name: 'Pepe' },
-      { chain: 'arbitrum', address: '0x912CE59144191C1204E64559FE8253a0e49E6548', symbol: 'ARB', name: 'Arbitrum' },
-    ];
-    const introRows = () => { const m = trendRows().slice(0, SHOW); return m.length ? m : EXAMPLES; };
-    function introHtml() {
-      const mapped = trendRows().length > 0;
-      return noteCard('<b>who really holds a token?</b> paste a token on ethereum, base, arbitrum or robinhood chain. DiDo maps its top holders from Blockscout, links the wallets that were funded together, marks the deployer, its insiders and the launch snipers, and opens any wallet into its own portfolio.', 'is-intro')
-        + shelf('intro', mapped ? 'mapped here lately' : 'try one', mapped ? 'open one' : 'holder data by blockscout', '', introRows().map(t => card(t, {})).join(''));
-    }
-
     function render() {
       if (!shown) return;
       /* the stage: its view, the wait over an empty field, the pill */
@@ -5022,7 +5009,7 @@
       els.homeKey.innerHTML = keyHtml();
       /* the board as cards, kept in place when only the numbers move */
       const keep = els.homeShelves.scrollTop;
-      els.homeShelves.innerHTML = boardShelves() || introHtml();
+      els.homeShelves.innerHTML = boardShelves() || noteCard('the entry board has no read to show right now. trending and your tokens stay around the stage.');
       els.homeShelves.scrollTop = keep;
       els.homeShelves.querySelectorAll('.dd-hc').forEach((c, i) => c.style.setProperty('--i', String(Math.min(i, 12))));
       const tOld = els.homeTrend.querySelector('.dd-strip__row'), tLeft = tOld ? tOld.scrollLeft : 0;

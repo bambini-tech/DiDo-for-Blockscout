@@ -15,6 +15,8 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# The board runs the same vendored engine the page does.
+COPY --from=build /app/web/vendor ./web/vendor
 COPY package.json VERSION ./
 USER node
 EXPOSE 3000

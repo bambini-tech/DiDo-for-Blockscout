@@ -6,6 +6,9 @@ import { registerWeb } from './web.js';
 import { registerIntel } from './intel-routes.js';
 import { MappedLog } from './mapped.js';
 import { tintOf } from './tint.js';
+import { BoardKeeper } from './board/keeper.js';
+import { Market } from './market/market.js';
+import { loadEngine } from './board/engine.js';
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
@@ -28,6 +31,8 @@ export interface AppOptions {
    * would let a visitor name their own IP.
    */
   trustProxyHops?: number;
+  /** Run the entry board (market reads on a 4-hour beat). Off in tests unless asked. */
+  board?: boolean | { market?: Market; intervalMs?: number; firstDelayMs?: number };
 }
 
 export function buildApp(opts: AppOptions): FastifyInstance {
@@ -42,7 +47,18 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.get('/health', async () => ({ ok: true, version: opts.version }));
   if (opts.webDir) registerWeb(app, { dir: opts.webDir, version: opts.version, holderIntel: opts.holderIntel ?? true });
   const mapped = new MappedLog();
+  let board: BoardKeeper | undefined;
+  if (opts.board && (opts.holderIntel ?? true)) {
+    const b = typeof opts.board === 'object' ? opts.board : {};
+    board = new BoardKeeper(
+      { market: b.market ?? new Market(), engine: loadEngine(), service, intervalMs: b.intervalMs ?? 4 * 3600_000 },
+      (msg) => app.log.info(msg),
+    );
+    board.start(b.firstDelayMs ?? 5_000);
+    app.addHook('onClose', async () => board?.stop());
+  }
   registerIntel(app, service, {
+    ...(board ? { board } : {}),
     client: opts.client,
     configured: opts.holderIntel ?? true,
     ...(opts.scansPerMinute !== undefined ? { scansPerMinute: opts.scansPerMinute } : {}),

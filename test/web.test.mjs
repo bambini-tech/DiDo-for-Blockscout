@@ -61,3 +61,16 @@ test('config tells the page whether the map is live', async () => {
   assert.equal(js.statusCode, 200);
   assert.match(js.headers['content-type'], /javascript/);
 });
+
+test('every let-go reason the board gives is one the page words', async () => {
+  const { LET_GO_REASONS } = await import('../dist/board/read.js');
+  const js = read('web/src/dido.js');
+  const body = js.slice(js.indexOf('function reasonText(g)'), js.indexOf("default: return g.reason || 'let go'"));
+  const worded = new Set([...body.matchAll(/case '([a-z_]+)'/g)].map((m) => m[1]));
+  for (const r of LET_GO_REASONS) assert.ok(worded.has(r), `the page has no words for "${r}"`);
+  const src = read('src/board/read.ts');
+  // ...and every reason word the read uses is in the list (so the check above sees it).
+  for (const [, w] of src.matchAll(/'([a-z_]+)'/g)) {
+    if (worded.has(w)) assert.ok(LET_GO_REASONS.includes(w), `"${w}" is not listed in LET_GO_REASONS`);
+  }
+});

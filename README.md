@@ -7,8 +7,10 @@ with 2,000 holders can turn out to be twelve people.
 
 Every holder, cluster, wallet and token fact comes from the
 [Blockscout PRO API](https://dev.blockscout.com), read by this repo's own
-server. The only other data is the price chart, which the viewer's browser
-reads from DexScreener and GeckoTerminal.
+server. Market data (which tokens are moving, their prices and candles) comes
+from DexScreener and GeckoTerminal, because that is the one thing an explorer
+does not carry: the price chart reads it in the viewer's browser, the start
+page's entry board on the server.
 
 Built for the [Blockscout PRO API Buildathon](https://craftora.tech/sprints/blockscout-pro-api-buildathon/)
 by the team behind [DigitalDon](https://digitaldon.net). DiDo is DigitalDon's
@@ -20,6 +22,11 @@ Chains: **Ethereum, Base, Arbitrum One, Robinhood Chain**.
 
 ## What you can do
 
+- **Start from the board.** The start page is DiDo's own: a garden of every
+  token the server read in its last round, the picks lit (at their entry,
+  near it, or at support, sized by liquidity and placed by room to the sell
+  level), what is running hot right now, and the tokens mapped here lately.
+  Hover any bubble to see why it was picked or let go.
 - **See who holds it.** The top 64 holders as bubbles sized by their share of
   supply, the liquidity pools as one LP bubble, burn addresses left out.
 - **See who belongs together.** Holders linked into clusters by how they were
@@ -54,6 +61,7 @@ gate for the whole process, retries on 429/5xx, and an honest
 | A wallet's tokens and their USD value | `GET /{chainId}/api/v2/addresses/{wallet}/token-balances` |
 | A wallet's transaction count | `GET /{chainId}/api/v2/addresses/{wallet}/counters` |
 | A wallet's NFTs | `GET /{chainId}/api/v2/addresses/{wallet}/nft` |
+| The board's holder check (top 10 share) for every pick | `GET /{chainId}/api/v2/tokens/{token}` + `/holders` |
 
 One key covers all four chains through the multichain gateway
 (`api.blockscout.com/{chainId}/...`). Addresses link to each chain's
@@ -73,6 +81,29 @@ A first look at a token costs about 60–120 Blockscout requests, roughly
 and the clusters join it when the walk is done, with a progress line in
 between. Funding traces are cached per wallet and shared across tokens, and
 a finished map is cached for 10 minutes.
+
+## The entry board
+
+Every 4 hours the server reads the tokens that are moving on the four
+chains (GeckoTerminal's trending and top-volume pools, DexScreener's boosts,
+profiles and community takeovers) and runs each through three stages, the
+same ones DiDo's start page shows:
+
+1. **solid**: a real pool. Logo and info on its pool, liquidity at least
+   $30k, 2+ days old, $25k+ daily volume, liquidity at least 1% of market
+   cap, trading both ways, a day's volume under 25x its pool, 150+ trades.
+2. **at entry**: the analysis engine (the same one that draws the chart's
+   zones) reads its hourly candles. Kept when price is in a buy zone (or
+   within 5% above it) with room to the sell level (12% for a day trade, 25%
+   for weeks) and a score of 55+; a score of 45-54 in the zone is shown as
+   *at support*.
+3. **clean holders**: Blockscout's holder list. Let go when the top 10
+   wallets (pools and burn addresses aside) hold more than half.
+
+Everything read and let go stays in the garden, faint, with the stage and
+the reason. A round reads at most 60 tokens' candles (`BOARD_MAX_READS`) at
+one request every 4 s, so it takes a few minutes; the board shows the last
+round until the next one lands.
 
 ## How wallets get linked
 
@@ -125,6 +156,7 @@ GET /api/holder-progress?token&chain           how far a running walk has got
 GET /api/wallet-scan?address                   a wallet across every chain
 GET /api/token-tint?u=<logo url>               the token's colours, for the background
 GET /api/most-scanned                          tokens mapped here in the last 24 h
+GET /api/board                                 the entry board: picks, running hot, everything let go
 ```
 
 Uncached cluster walks are limited to 6 per minute per IP, wallet scans to 10.
@@ -176,6 +208,7 @@ test/                    node:test suites
 - [x] Funder tracing, deployer, clusters
 - [x] Launch signals (bundles, snipers) from Transfer logs
 - [x] The DiDo map, chart and wallet journey on this server
+- [x] DiDo's start page: the entry board, the garden, running hot
 - [ ] Live deployment and demo
 
 **Sprint 2 (Oct 25–31)**: token security from the verified contract

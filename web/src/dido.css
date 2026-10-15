@@ -1330,7 +1330,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--ink); outli
   .dd-hs.is-fly[data-view="cards"] .dd-hs__cards .dd-hc { animation: none; }
 }
 
-/* ---------- the garden (dormant without an entry board) ----------
+/* ---------- the garden ----------
    Every token the entry board read, drawn in the stage's field (0.25.0;
    before, a canvas under the whole welcome with the shelves rising over it
    in a sheet). */
@@ -1551,9 +1551,3 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--ink); outli
    analysis engine is sliced out of the ENGINE markers. Do not edit it here —
    edit the HOLDERMAP-CSS block in webapp/index.html and rebuild. */
 {{HOLDERMAP_CSS}}
-
-
-
-/* DiDo for Blockscout: the stage's intro when there is no entry board. */
-.dd-shelf__note.is-intro { border-style: solid; color: var(--ink); font-size: 13px; line-height: 1.55; }
-.dd-shelf__note.is-intro b { display: block; font-size: 17px; font-weight: 600; margin-bottom: 4px; }

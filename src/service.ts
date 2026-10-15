@@ -108,6 +108,11 @@ export class Service {
     });
   }
 
+  /** Blockscout requests sent so far (for the board's accounting). */
+  get blockscoutCalls(): number {
+    return this.client.calls;
+  }
+
   progress(chain: Chain, address: string): Progress | { running: false } {
     return this.progressOf.get(`${chain.key}:${address}`) ?? { running: false };
   }
