@@ -62,7 +62,7 @@ gate for the whole process, retries on 429/5xx, and an honest
 | Launch: bundles and snipers | `GET /v2/api?module=logs&action=getLogs` (Transfer events from the creation block) |
 | Who funded each holder, and every wallet it traded coin with | `GET /v2/api?module=account&action=txlist` (and `txlistinternal` when no plain transfer funded it), oldest first |
 | Whether a shared funder is infrastructure | `GET /{chainId}/api/v2/addresses/{funder}/counters` |
-| Which chains a wallet is on, in one request | `GET /multichain/api/v1/addresses?q={wallet}&chain_id=...` (the multichain aggregator; its indexed chains from `/multichain/api/v1/chains`) |
+| Which chains a wallet is on, in one request | `GET /multichain/api/v1/addresses?q={wallet}&chain_id=1,8453,...` (the multichain aggregator) |
 | A wallet's native balance, ENS, name and tags | `GET /{chainId}/api/v2/addresses/{wallet}` |
 | A wallet's tokens and their USD value | `GET /{chainId}/api/v2/addresses/{wallet}/token-balances` |
 | A wallet's transaction count | `GET /{chainId}/api/v2/addresses/{wallet}/counters` |
@@ -169,10 +169,11 @@ scans a month.
 
 **The wallet scan asks Blockscout's multichain aggregator first.** One
 request says which chains the wallet exists on; only those are read. The
-aggregator refuses a request naming a chain it does not index, so it is
-asked only about the chains it lists (read once a day), and any of DiDo's
-chains it does not index are still probed directly. If the aggregator cannot
-be read, every chain is probed: a wallet is never thinner for it. The answer
+aggregator refuses a request naming a chain it does not index, so where its
+chain list can be read (once a day) it is asked only about those, and any of
+DiDo's chains it does not index are still probed directly; where it cannot,
+it is asked about all of them (it indexes every chain DiDo lists today). If
+the lookup fails, every chain is probed: a wallet is never thinner for it. The answer
 says which way it went (`discovery`). A chain where Blockscout reports no
 token at all (`has_tokens: false`) costs one request there.
 

@@ -34,7 +34,7 @@
 import { CHAINS, type Chain } from './chains.js';
 import type { BlockscoutClient } from './blockscout/client.js';
 import { readHistory, readWalletChain, type HistoryRead, type WalletChainRead } from './blockscout/wallet.js';
-import { aggregatorChains, aggregatorError, chainsWithAddress } from './blockscout/multichain.js';
+import { aggregatorChains, aggregatorError, chainsWithAddress, lookupError } from './blockscout/multichain.js';
 import { attachPnl, type ChainPnl, type HoldingPnl } from './wallet-pnl.js';
 import type { DexPair } from './market/market.js';
 
@@ -106,6 +106,8 @@ interface ChainEntry {
   tokens_usd: number;
   total_usd: number;
   pnl: ChainPnl | null;
+  /** Why the cost basis could not be read on this chain, in Blockscout's words. */
+  pnl_error?: string;
   nfts: Nft[];
   nfts_more: boolean;
   nfts_hidden: number;
@@ -278,13 +280,17 @@ function withBasis(wallet: string, e: ChainEntry, h: HistoryRead, chains: readon
   const holdings = e.holdings.map((x) => ({ ...x }));
   const notes: string[] = [];
   let pnl: ChainPnl | null = null;
-  if (h.status !== 'ok') notes.push(`${e.chain_label}: cost basis unavailable`);
+  let pnlError: string | undefined;
+  if (h.status !== 'ok') {
+    notes.push(`${e.chain_label}: cost basis unavailable`);
+    pnlError = h.error ?? 'error';
+  }
   else if (h.truncated) notes.push(`history too long to price (>10,000 ${h.truncated})`);
   else {
     const wrapped = chains.find((c) => c.key === e.chain)?.wrapped ?? null;
     pnl = attachPnl(wallet, holdings as Array<{ address: string; amount: number; usd: number; pnl: HoldingPnl | null }>, h, wrapped, e.native.price_usd ?? 0);
   }
-  return { ...e, holdings, pnl, notes: [...notes, ...e.notes] };
+  return { ...e, holdings, pnl, ...(pnlError ? { pnl_error: pnlError } : {}), notes: [...notes, ...e.notes] };
 }
 
 /** What an airdropped advert calls itself: a link, a domain, or a call to claim something. */
@@ -419,14 +425,17 @@ type PlanInfo =
 async function planChains(client: BlockscoutClient, address: string, chains: readonly Chain[], discovery: Discovery): Promise<{ read: Set<number>; info: PlanInfo }> {
   const all = new Set(chains.map((c) => c.chainId));
   if (discovery === 'probe') return { read: all, info: { via: 'probe', probed: all.size } };
-  const indexed = await aggregatorChains(client);
-  if (!indexed) {
-    const why = aggregatorError();
-    return { read: all, info: { via: 'probe', probed: all.size, reason: `aggregator chain list unavailable${why ? ` (${why})` : ''}` } };
-  }
+  // Without its chain list (the PRO gateway does not serve that route) every
+  // chain is asked about: the aggregator refuses the whole request if it does
+  // not index one, and a refusal falls back to probing every chain.
+  const indexed = await aggregatorChains(client) ?? all;
+  const listed = indexed !== all;
   const covered = chains.filter((c) => indexed.has(c.chainId)).map((c) => c.chainId);
   const present = await chainsWithAddress(client, address, covered);
-  if (!present) return { read: all, info: { via: 'probe', probed: all.size, reason: 'aggregator lookup failed' } };
+  if (!present) {
+    const why = [listed ? null : `chain list: ${aggregatorError() ?? 'unavailable'}`, `lookup: ${lookupError() ?? 'failed'}`].filter(Boolean).join('; ');
+    return { read: all, info: { via: 'probe', probed: all.size, reason: `aggregator lookup failed (${why})` } };
+  }
   const uncovered = chains.filter((c) => !indexed.has(c.chainId)).map((c) => c.chainId);
   const read = new Set([...present, ...uncovered].filter((id) => all.has(id)));
   return { read, info: { via: 'multichain', found_on: present.size, probed: uncovered.length, skipped: covered.length - present.size } };

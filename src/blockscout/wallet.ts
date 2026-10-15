@@ -201,6 +201,8 @@ export interface HistoryRead {
   transfers: HistoryRow[];
   /** Which listing hit the window, if one did: its basis would be wrong, so none is given. */
   truncated: string | null;
+  /** Why a listing could not be read, in Blockscout's words ("tokentx: HTTP 504"). */
+  error: string | null;
 }
 
 /**
@@ -214,7 +216,8 @@ export async function readHistory(client: BlockscoutClient, chainId: number, wal
   });
   const [txs, internals, transfers] = await Promise.all([listing('txlist'), listing('txlistinternal'), listing('tokentx')]);
   const rows = (r: { data: HistoryRow[] | null }) => (Array.isArray(r.data) ? r.data : []);
-  const failed = [txs, internals, transfers].some((r) => r.status === 'error');
+  const failedAt = ([['txlist', txs], ['txlistinternal', internals], ['tokentx', transfers]] as const).find(([, r]) => r.status === 'error');
+  const failed = Boolean(failedAt);
   const named: Array<[string, HistoryRow[]]> = [['transactions', rows(txs)], ['internal transactions', rows(internals)], ['token transfers', rows(transfers)]];
   return {
     status: failed ? 'error' : 'ok',
@@ -222,5 +225,6 @@ export async function readHistory(client: BlockscoutClient, chainId: number, wal
     internals: rows(internals),
     transfers: rows(transfers),
     truncated: named.find(([, r]) => r.length >= HISTORY_ROWS)?.[0] ?? null,
+    error: failedAt ? `${failedAt[0]}: ${failedAt[1].detail ?? 'error'}` : null,
   };
 }
