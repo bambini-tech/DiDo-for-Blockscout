@@ -1,9 +1,10 @@
 /**
  * Blockscout PRO API client.
  *
- * Two route families, one key for every chain:
+ * Three route families, one key for every chain:
  *   REST v2           https://api.blockscout.com/{chainId}/api/v2/{path}
  *   Etherscan-compat  https://api.blockscout.com/v2/api?chain_id=...&module=...
+ *   Multichain        https://api.blockscout.com/multichain/api/v1/{path} (across chains)
  *
  * Three things every caller relies on:
  *
@@ -19,6 +20,8 @@
  * The API key travels as a query parameter, so URLs are never logged or put
  * into an error message as-is.
  */
+
+import type { CreditLedger } from './credits.js';
 
 export type Status = 'ok' | 'absent' | 'error';
 
@@ -36,6 +39,8 @@ export interface ClientOptions {
   fetch?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  /** Credit accounting and the daily brake. */
+  ledger?: CreditLedger;
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -52,6 +57,7 @@ export class BlockscoutClient {
   private readonly fetchFn: typeof fetch;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
+  readonly ledger: CreditLedger | undefined;
   private nextSlot = 0;
 
   constructor(opts: ClientOptions) {
@@ -63,6 +69,7 @@ export class BlockscoutClient {
     this.fetchFn = opts.fetch ?? fetch;
     this.sleep = opts.sleep ?? defaultSleep;
     this.now = opts.now ?? Date.now;
+    this.ledger = opts.ledger;
   }
 
   /** GET /{chainId}/api/v2/{path}. */
@@ -70,6 +77,27 @@ export class BlockscoutClient {
     const url = new URL(`${this.baseUrl}/${chainId}/api/v2/${path.replace(/^\/+/, '')}`);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
     const res = await this.request(url, `REST ${chainId}/${path}`);
+    if (!res) return { data: null, status: 'error' };
+    if (res.status === 404) return { data: null, status: 'absent' };
+    if (res.status !== 200) return { data: null, status: 'error' };
+    try {
+      return { data: (await res.json()) as T, status: 'ok' };
+    } catch {
+      return { data: null, status: 'error' };
+    }
+  }
+
+  /**
+   * GET /multichain/api/v1/{path}: Blockscout's multichain aggregator, one
+   * answer across every chain it indexes. An array value repeats the
+   * parameter (chain_id=1&chain_id=8453).
+   */
+  async multichain<T>(path: string, params: Record<string, string | number | Array<string | number>> = {}): Promise<Result<T>> {
+    const url = new URL(`${this.baseUrl}/multichain/api/v1/${path.replace(/^\/+/, '')}`);
+    for (const [k, v] of Object.entries(params)) {
+      for (const one of Array.isArray(v) ? v : [v]) url.searchParams.append(k, String(one));
+    }
+    const res = await this.request(url, `Multichain ${path}`);
     if (!res) return { data: null, status: 'error' };
     if (res.status === 404) return { data: null, status: 'absent' };
     if (res.status !== 200) return { data: null, status: 'error' };
@@ -112,6 +140,11 @@ export class BlockscoutClient {
   }
 
   private async request(url: URL, context: string): Promise<Response | null> {
+    // One charge per logical request; a refused one is an error, never "nothing here".
+    if (this.ledger && !this.ledger.charge(url.pathname)) {
+      log(`${context}: not sent -- today's credit brake is reached`);
+      return null;
+    }
     url.searchParams.set('apikey', this.apiKey);
     for (let attempt = 1; attempt <= this.attempts; attempt++) {
       await this.gate();

@@ -24,8 +24,7 @@ export class MappedLog {
     let e = this.entries.get(key);
     if (!e) {
       if (this.entries.size >= 2_000) this.prune();
-      // The page keys chains by DexScreener's ids: 'ethereum', not 'eth'.
-      e = { chain: chain.key === 'eth' ? 'ethereum' : chain.key, address, symbol, name, hits: [], first_price_usd: priceUsd };
+      e = { chain: chain.key, address, symbol, name, hits: [], first_price_usd: priceUsd };
       this.entries.set(key, e);
     }
     e.hits.push(t);

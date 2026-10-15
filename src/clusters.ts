@@ -47,7 +47,7 @@ export interface LinkOptions {
 
 export const DEFAULT_LINK_OPTIONS: LinkOptions = {
   infraMinTxs: 2_000,
-  sinkMinSenders: 8,
+  sinkMinSenders: 15,
   sameBlockMin: 2,
   sameAmountMin: 3,
   togetherWindowSec: 300,

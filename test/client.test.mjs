@@ -97,3 +97,47 @@ test('the API key never appears in a log line', async () => {
   assert.ok(lines.length > 0);
   assert.ok(lines.every((l) => !l.includes('test-key')), lines.join('\n'));
 });
+
+test('credits: each logical request is charged once at Blockscout\'s price; the brake stops a runaway day', async () => {
+  const { CreditLedger, PLANS } = await import('../dist/blockscout/credits.js');
+  let t = Date.parse('2026-10-15T10:00:00Z');
+  const ledger = new CreditLedger({ ...PLANS.builder, dailyBrake: 100 }, () => t);
+  let n = 0;
+  const f = scriptedFetch([['/tokens/', () => (n++ === 0 ? json({}, 503) : json({ ok: 1 }))]]);
+  const c = makeClient(f, { ledger });
+  assert.equal((await c.rest(1, 'tokens/0x' + 'a'.repeat(40))).status, 'ok');
+  assert.equal(f.seen.length, 2, 'retried once');
+  assert.equal(ledger.today, 20, 'charged once, not per attempt');
+  assert.equal(ledger.priceOf('/1/api/v2/addresses/0x' + 'a'.repeat(40) + '/coin-balance-history'), 20, 'built-in price list until the published one loads');
+  for (let i = 0; i < 4; i++) await c.rest(1, 'tokens/0x' + 'b'.repeat(40));
+  assert.equal(ledger.today, 100);
+  const refused = await c.rest(1, 'tokens/0x' + 'c'.repeat(40));
+  assert.equal(refused.status, 'error', 'over the brake: an error, never "absent"');
+  assert.equal(ledger.stats().refused_today, 1);
+  t += 24 * 3600e3;
+  assert.equal((await c.rest(1, 'tokens/0x' + 'd'.repeat(40))).status, 'ok', 'a new UTC day starts fresh');
+});
+
+test('credits: the published price list is read and matched by route', async () => {
+  const { CreditLedger, PLANS } = await import('../dist/blockscout/credits.js');
+  const ledger = new CreditLedger(PLANS.builder);
+  const ok = await ledger.loadPricing(async () => json({ endpoint_pricing: { default: 20, 'api/v2/addresses/:address_hash/internal-transactions': 40, 'api/v2/transactions/:hash/summary': 50 } }));
+  assert.equal(ok, true);
+  assert.equal(ledger.priceOf('/8453/api/v2/addresses/0x' + 'a'.repeat(40) + '/internal-transactions'), 40);
+  assert.equal(ledger.priceOf('/8453/api/v2/transactions/0x' + 'f'.repeat(64) + '/summary'), 50);
+  assert.equal(ledger.priceOf('/8453/api/v2/tokens/0x' + 'a'.repeat(40) + '/holders'), 20);
+  assert.equal(ledger.priceOf('/v2/api'), 20);
+  assert.equal(await new CreditLedger(PLANS.free).loadPricing(async () => { throw new Error('offline'); }), false);
+});
+
+test('plans: builder by default, free on request, one knob overridable', async () => {
+  const { loadConfig } = await import('../dist/config.js');
+  const b = loadConfig({});
+  assert.equal(b.plan.name, 'builder');
+  assert.equal(b.rps, 13.5);
+  assert.equal(b.plan.traceLimit, 100);
+  const f = loadConfig({ BLOCKSCOUT_PLAN: 'free' });
+  assert.equal(f.rps, 4.5);
+  assert.equal(f.plan.dailyBrake, 90_000);
+  assert.equal(loadConfig({ BLOCKSCOUT_RPS: '10' }).rps, 10);
+});

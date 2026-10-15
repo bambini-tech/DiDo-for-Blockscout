@@ -55,10 +55,13 @@ export interface ServiceOptions {
   tokenTtlMs?: number;
   clusterTtlMs?: number;
   traceTtlMs?: number;
+  /** Oldest transactions read per trace. Blockscout bills per request, not per row: a deep window is free. */
+  traceWindow?: number;
   link?: Partial<LinkOptions>;
 }
 
 const MINUTE = 60_000;
+const DAY = 24 * 60 * MINUTE;
 
 export class Service {
   private readonly tokens: TtlCache<TokenResponse>;
@@ -71,6 +74,7 @@ export class Service {
   private readonly inflight = new Map<string, Promise<Reply<unknown>>>();
   private readonly traceLimit: number;
   private readonly concurrency: number;
+  private readonly traceWindow: number;
 
   constructor(private readonly client: BlockscoutClient, private readonly opts: ServiceOptions = {}) {
     this.tokens = new TtlCache(opts.tokenTtlMs ?? MINUTE);
@@ -78,6 +82,7 @@ export class Service {
     this.traces = new TtlCache(opts.traceTtlMs ?? 30 * MINUTE, 50_000);
     this.traceLimit = opts.traceLimit ?? 50;
     this.concurrency = opts.concurrency ?? 6;
+    this.traceWindow = opts.traceWindow ?? 100;
   }
 
   cachedToken(chain: Chain, address: string): TokenResponse | undefined {
@@ -210,8 +215,9 @@ export class Service {
       const key = `${chain.key}:${h.address}`;
       let t = this.traces.get(key);
       if (!t) {
-        t = await traceFunding(this.client, chain.chainId, h.address);
-        if (t.status === 'ok') this.traces.set(key, t);
+        t = await traceFunding(this.client, chain.chainId, h.address, this.traceWindow);
+        // A full window is the wallet's oldest history: it cannot change, so it is kept a day.
+        if (t.status === 'ok') this.traces.set(key, t, t.windowFull ? DAY : undefined);
       }
       out.set(h.address, t);
       if (prog) {

@@ -12,7 +12,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { chainByKey, type Chain } from './chains.js';
 import type { Service } from './service.js';
 import { basePayload, fullPayload } from './holders.js';
-import { scanWallet } from './wallet.js';
+import { scanWallet, type Discovery } from './wallet.js';
 import type { BlockscoutClient } from './blockscout/client.js';
 import { TtlCache } from './cache.js';
 import type { BoardKeeper } from './board/keeper.js';
@@ -26,6 +26,8 @@ export interface IntelOptions {
   /** Uncached wallet scans per IP per minute. */
   walletScansPerMinute?: number;
   client: BlockscoutClient;
+  /** How the wallet scan finds a wallet's chains: one multichain lookup (default) or a probe per chain. */
+  walletDiscovery?: Discovery;
   /** The entry board; absent, the page shows no board and no garden. */
   board?: BoardKeeper;
   onMapped?: (chain: Chain, token: string, symbol: string | null, name: string | null, priceUsd: number | null) => void;
@@ -100,7 +102,7 @@ export function registerIntel(app: FastifyInstance, service: Service, opts: Inte
     let job = walletInflight.get(address);
     if (!job) {
       if (!walletLimit.take(req.ip)) return fail(reply, 'rate_limited');
-      job = scanWallet(opts.client, address).finally(() => walletInflight.delete(address));
+      job = scanWallet(opts.client, address, undefined, opts.walletDiscovery ?? 'multichain').finally(() => walletInflight.delete(address));
       walletInflight.set(address, job);
     }
     const data = await job;

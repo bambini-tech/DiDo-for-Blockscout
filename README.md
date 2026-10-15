@@ -18,7 +18,9 @@ terminal; this repository is its stand-alone discovery edition: the holder
 map, the wallet journey and the chart, with no trading and no dependency on
 DigitalDon's own backend.
 
-Chains: **Ethereum, Base, Arbitrum One, Robinhood Chain**.
+**17 chains**: every mainnet the Blockscout PRO API serves that DexScreener and
+GeckoTerminal also cover ([list](#chains)), from Ethereum, Base and Arbitrum to
+Polygon, OP Mainnet, Celo, Scroll, ZKsync, Unichain, Robinhood Chain and Arc.
 
 ## What you can do
 
@@ -35,7 +37,7 @@ Chains: **Ethereum, Base, Arbitrum One, Robinhood Chain**.
 - **See the insiders and the snipers.** Role rings on the map: the deployer,
   wallets the deployer funded, wallets that bought in the launch block
   (bundles) or within a minute of it (snipers), and fresh wallets.
-- **Follow a wallet.** Click any holder: its portfolio across all four chains
+- **Follow a wallet.** Click any holder: its portfolio across all 17 chains
   opens beside the map, and any token it holds opens as its own map. Every
   wallet is one click from its page on Blockscout.
 - **Read the chart.** Price, with the analysis engine's entry and exit zones
@@ -57,15 +59,16 @@ gate for the whole process, retries on 429/5xx, and an honest
 | Launch: bundles and snipers | `GET /v2/api?module=logs&action=getLogs` (Transfer events from the creation block) |
 | Who funded each holder, and every wallet it traded coin with | `GET /v2/api?module=account&action=txlist` (and `txlistinternal` when no plain transfer funded it), oldest first |
 | Whether a shared funder is infrastructure | `GET /{chainId}/api/v2/addresses/{funder}/counters` |
+| Which chains a wallet is on, in one request | `GET /multichain/api/v1/addresses?q={wallet}&chain_id=...` (the multichain aggregator; its indexed chains from `/multichain/api/v1/chains`) |
 | A wallet's native balance, ENS, name and tags | `GET /{chainId}/api/v2/addresses/{wallet}` |
 | A wallet's tokens and their USD value | `GET /{chainId}/api/v2/addresses/{wallet}/token-balances` |
 | A wallet's transaction count | `GET /{chainId}/api/v2/addresses/{wallet}/counters` |
 | A wallet's NFTs | `GET /{chainId}/api/v2/addresses/{wallet}/nft` |
 | The board's holder check (top 10 share) for every pick | `GET /{chainId}/api/v2/tokens/{token}` + `/holders` |
 
-One key covers all four chains through the multichain gateway
-(`api.blockscout.com/{chainId}/...`). Addresses link to each chain's
-Blockscout explorer: eth, base, arbitrum and robinhoodchain `.blockscout.com`.
+One key covers all 17 chains through the multichain gateway
+(`api.blockscout.com/{chainId}/...`), and every address links to its chain's
+Blockscout explorer.
 
 ```
 browser ──── DiDo page (map, chart, wallet pane)
@@ -76,15 +79,99 @@ browser ──── DiDo page (map, chart, wallet pane)
             └── Blockscout PRO API (one key, one rate gate, every chain)
 ```
 
-A first look at a token costs about 60–120 Blockscout requests, roughly
-15–30 seconds behind the rate gate; the map shows the holders within seconds
-and the clusters join it when the walk is done, with a progress line in
-between. Funding traces are cached per wallet and shared across tokens, and
-a finished map is cached for 10 minutes.
+A first look at a token takes about 130–230 Blockscout requests (see
+[Plan and credits](#plan-and-credits)), 10–17 seconds on the builder plan;
+the map shows the holders within seconds and the clusters join it when the
+walk is done, with a progress line in between. Funding traces are cached per
+wallet and shared across tokens (a day for a wallet whose oldest history is
+fully read, since it can no longer change), and a finished map is cached for
+10 minutes.
+
+## Chains
+
+DiDo runs on every **mainnet the Blockscout PRO API serves** (60 at the last
+check) **that DexScreener and GeckoTerminal also cover**: holders and wallets
+need Blockscout, finding and charting a token needs the other two. That is
+17 chains today:
+
+| Chain | Chain id | DexScreener | GeckoTerminal | Gas | Explorer |
+|---|---|---|---|---|---|
+| Ethereum | 1 | `ethereum` | `eth` | ETH | [eth.blockscout.com](https://eth.blockscout.com) |
+| Arbitrum One | 42161 | `arbitrum` | `arbitrum` | ETH | [arbitrum.blockscout.com](https://arbitrum.blockscout.com) |
+| Arc | 5042 | `arc` | `arc` | USDC | [explorer.arc.io](https://explorer.arc.io) |
+| Base | 8453 | `base` | `base` | ETH | [base.blockscout.com](https://base.blockscout.com) |
+| Celo | 42220 | `celo` | `celo` | CELO | [celo.blockscout.com](https://celo.blockscout.com) |
+| Flow EVM | 747 | `flowevm` | `flow-evm` | FLOW | [evm.flow.com](https://evm.flow.com) |
+| Fuse | 122 | `fuse` | `fuse` | FUSE | [explorer.fuse.io](https://explorer.fuse.io) |
+| Ink | 57073 | `ink` | `ink` | ETH | [explorer.inkonchain.com](https://explorer.inkonchain.com) |
+| MegaETH | 4326 | `megaeth` | `megaeth` | ETH | [megaeth.blockscout.com](https://megaeth.blockscout.com) |
+| OP Mainnet | 10 | `optimism` | `optimism` | ETH | [explorer.optimism.io](https://explorer.optimism.io) |
+| Polygon | 137 | `polygon` | `polygon_pos` | POL | [polygon.blockscout.com](https://polygon.blockscout.com) |
+| Robinhood Chain | 4663 | `robinhood` | `robinhood` | ETH | [robinhoodchain.blockscout.com](https://robinhoodchain.blockscout.com) |
+| Scroll | 534352 | `scroll` | `scroll` | ETH | [scrollscan.com](https://scrollscan.com) |
+| Soneium | 1868 | `soneium` | `soneium` | ETH | [soneium.blockscout.com](https://soneium.blockscout.com) |
+| Unichain | 130 | `unichain` | `unichain` | ETH | [unichain.blockscout.com](https://unichain.blockscout.com) |
+| World Chain | 480 | `worldchain` | `world-chain` | ETH | [worldchain-mainnet.explorer.alchemy.com](https://worldchain-mainnet.explorer.alchemy.com) |
+| ZKsync Era | 324 | `zksync` | `zksync` | ETH | [zksync.blockscout.com](https://zksync.blockscout.com) |
+
+The list lives in one file, `data/chains.json`, read by the server, the
+board, the wallet scan and the page. No id in it was guessed: for each chain
+a GeckoTerminal pool was looked up on DexScreener under that chain's id and
+had to come back as the same pool, with candles. `npm run verify-chains`
+re-runs that check against live data (no key needed), and
+`npm run verify-chains -- --candidates` lists the Blockscout mainnets that
+are not in the file yet.
+
+Left out, for now, because DexScreener does not index them (Blockscout
+does): Gnosis, Ronin, ZetaChain, Mode, Lisk, Astar, Rootstock, Etherlink,
+Immutable zkEVM, IOTA EVM, Zilliqa, Filecoin EVM, Plume, Shape, Arbitrum Nova
+and a few younger chains. The remaining PRO API mainnets have no
+GeckoTerminal market yet, so there would be no candles to chart.
+
+## Plan and credits
+
+DiDo is built for Blockscout's **builder plan** (15 requests a second, 100M
+credits a month) and runs on the free plan too (`BLOCKSCOUT_PLAN=free`: 5 a
+second, 100k credits a day, 50 holders traced instead of 100).
+
+- **One rate gate** for the whole process at 90% of the plan's rate (13.5/s),
+  with 12 requests in flight so the gate, not network latency, sets the pace.
+- **Every route DiDo uses is a standard one (20 credits).** Prices come from
+  Blockscout's published list (`api.blockscout.com/api/json/config`), read at
+  start; each request is charged once, retries included.
+- **Depth is free, requests are not.** Blockscout bills per request, not per
+  row, so each funding trace reads a wallet's oldest 100 transactions in the
+  same one request that 20 would cost.
+- **Nothing is read twice that cannot have changed:** traces, deployers,
+  launches and shared-sender counts are cached and shared across tokens.
+- **A runaway brake:** once a UTC day has spent twice an even day's share of
+  the month (~6.4M credits), new requests are refused until midnight and the
+  page says the data is unavailable -- never that a token has no holders.
+  `/health` shows today's credits.
+
+| What | Requests | Credits |
+|---|---|---|
+| Holders (the map's first answer) | 3 | 60 |
+| Full map, first look (100 holders traced, launch, deployer, shared funders) | ~130–230 | ~2,600–4,600 |
+| The same token again within 10 minutes | 0 | 0 |
+| Wallet scan (one multichain lookup, then 4 per chain it is on) | ~5–15 | ~100–300 |
+| Wallet scan without the aggregator (`WALLET_DISCOVERY=probe`, or if it is down) | ~20–30 | ~400–600 |
+| Entry board round (holder checks for the picks) | ~10–40 | ~200–800 |
+
+On 100M credits that is roughly 25,000 first-look maps or 400,000 wallet
+scans a month.
+
+**The wallet scan asks Blockscout's multichain aggregator first.** One
+request says which chains the wallet exists on; only those are read. The
+aggregator refuses a request naming a chain it does not index, so it is
+asked only about the chains it lists (read once a day), and any of DiDo's
+chains it does not index are still probed directly. If the aggregator cannot
+be read, every chain is probed: a wallet is never thinner for it. The answer
+says which way it went (`discovery`).
 
 ## The entry board
 
-Every 4 hours the server reads the tokens that are moving on the four
+Every 4 hours the server reads the tokens that are moving on all 17
 chains (GeckoTerminal's trending and top-volume pools, DexScreener's boosts,
 profiles and community takeovers) and runs each through three stages, the
 same ones DiDo's start page shows:
@@ -107,8 +194,8 @@ round until the next one lands.
 
 ## How wallets get linked
 
-For the top 50 holders that are people (pools, burn addresses and named
-contracts are set aside), DiDo reads each wallet's **oldest** 20 transactions:
+For the top 100 holders that are people (pools, burn addresses and named
+contracts are set aside), DiDo reads each wallet's **oldest** 100 transactions:
 where its first coin came from, and every wallet it exchanged native coin with
 early on. Then it links holders, strongest evidence first:
 
@@ -131,7 +218,7 @@ The rules that keep the map honest:
 - **Round amounts aren't a fingerprint.** 0.01 ETH is what thousands of
   strangers withdraw; 0.0137264 ETH is not.
 - **Some holders never link on coin flows.** Named contracts and *sinks*
-  (wallets paid by 8+ different senders: deposit addresses, treasuries) would
+  (wallets paid by 15+ different senders: deposit addresses, treasuries) would
   wire unrelated people together.
 - A wallet's first-transaction counterparty is shown when nothing else funded
   it, but never used as a link. Clusters held together only by timing or

@@ -23,6 +23,8 @@ export interface AppOptions {
   holderIntel?: boolean;
   /** Uncached cluster scans per IP per minute. */
   scansPerMinute?: number;
+  /** Wallet scan chain discovery: 'multichain' (default) or 'probe'. */
+  walletDiscovery?: 'multichain' | 'probe';
   /** Fetch used for token logos (tests pass a stub). */
   fetchImage?: typeof fetch;
   /**
@@ -44,7 +46,11 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   });
   const service = new Service(opts.client, opts.service);
 
-  app.get('/health', async () => ({ ok: true, version: opts.version }));
+  app.get('/health', async () => ({
+    ok: true,
+    version: opts.version,
+    ...(opts.client.ledger ? { blockscout: { ...opts.client.ledger.stats(), requests: opts.client.calls } } : {}),
+  }));
   if (opts.webDir) registerWeb(app, { dir: opts.webDir, version: opts.version, holderIntel: opts.holderIntel ?? true });
   const mapped = new MappedLog();
   let board: BoardKeeper | undefined;
@@ -60,6 +66,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   registerIntel(app, service, {
     ...(board ? { board } : {}),
     client: opts.client,
+    ...(opts.walletDiscovery ? { walletDiscovery: opts.walletDiscovery } : {}),
     configured: opts.holderIntel ?? true,
     ...(opts.scansPerMinute !== undefined ? { scansPerMinute: opts.scansPerMinute } : {}),
     onMapped: (chain, token, symbol, name, price) => mapped.record(chain, token, symbol, name, price),

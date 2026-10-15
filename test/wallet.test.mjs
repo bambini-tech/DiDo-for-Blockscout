@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { json, scriptedFetch, makeClient } from './helpers.mjs';
 import { scanWallet } from '../dist/wallet.js';
 import { buildApp } from '../dist/server.js';
+import { CHAINS } from '../dist/chains.js';
+const FOUR = CHAINS.filter((c) => [1, 8453, 42161, 4663].includes(c.chainId));
 
 const W = '0x' + 'c'.repeat(40);
 const [T1, T2, T3, T4, SCAM] = ['1', '2', '3', '4', '5'].map((c) => '0x' + c.repeat(40));
@@ -30,7 +32,7 @@ function fetchFor() {
 }
 
 test('a wallet across every chain: priced, dust, unpriced, scam, empty and failed chains', async () => {
-  const w = await scanWallet(makeClient(fetchFor()), W.toUpperCase().replace('0X', '0x'));
+  const w = await scanWallet(makeClient(fetchFor()), W.toUpperCase().replace('0X', '0x'), FOUR);
   assert.equal(w.address, W);
   assert.deepEqual(w.chains.map((c) => c.chain), ['base']);
   assert.deepEqual(w.empty_chains.sort(), ['ethereum', 'robinhood']);
@@ -70,4 +72,53 @@ test('route: every chain down is an error, not an empty wallet', async () => {
   const r = await app.inject(`/api/wallet-scan?address=${W}`);
   assert.equal(r.statusCode, 502);
   assert.equal(r.json().ok, false);
+});
+
+test('multichain discovery: one lookup, then only the chains the wallet is on (plus chains it does not index)', async () => {
+  const { resetAggregatorCache } = await import('../dist/blockscout/multichain.js');
+  resetAggregatorCache();
+  const base = fetchFor();
+  const seen = [];
+  const f = async (url) => {
+    const u = new URL(String(url));
+    seen.push(u);
+    if (u.pathname === '/multichain/api/v1/chains') return json({ items: [{ id: '1' }, { id: '8453' }, { id: '42161' }] }); // 4663 not indexed
+    if (u.pathname === '/multichain/api/v1/addresses') return json({ items: [{ hash: W.toUpperCase().replace('0X', '0x'), chain_id: '8453' }] });
+    return base(url);
+  };
+  const w = await scanWallet(makeClient(f), W, FOUR);
+  const look = seen.find((u) => u.pathname === '/multichain/api/v1/addresses');
+  assert.equal(look.searchParams.get('q'), W);
+  assert.deepEqual(look.searchParams.getAll('chain_id').sort(), ['1', '42161', '8453'], 'only indexed chains are asked about');
+  const probed = new Set(seen.filter((u) => /^\/\d+\/api\/v2\/addresses\/0x[0-9a-f]{40}$/.test(u.pathname)).map((u) => u.pathname.split('/')[1]));
+  assert.deepEqual([...probed].sort(), ['4663', '8453'], 'Base (found) and Robinhood (not indexed); Ethereum and Arbitrum skipped');
+  assert.deepEqual(w.chains.map((c) => c.chain), ['base']);
+  assert.deepEqual(w.empty_chains.sort(), ['arbitrum', 'ethereum', 'robinhood']);
+  assert.deepEqual(w.failed_chains, []);
+  assert.deepEqual(w.discovery, { via: 'multichain', found_on: 1, probed: 1, skipped: 2 });
+  assert.equal(w.total_usd, 6000, 'the same wallet as the full probe');
+});
+
+test('multichain discovery: an aggregator failure falls back to probing every chain', async () => {
+  const { resetAggregatorCache } = await import('../dist/blockscout/multichain.js');
+  resetAggregatorCache();
+  const base = fetchFor();
+  const f = async (url) => {
+    const u = new URL(String(url));
+    if (u.pathname === '/multichain/api/v1/chains') return json({ items: [{ id: '1' }, { id: '8453' }] });
+    if (u.pathname === '/multichain/api/v1/addresses') return json({}, 400);
+    return base(url);
+  };
+  const w = await scanWallet(makeClient(f), W, FOUR);
+  assert.equal(w.discovery.via, 'probe');
+  assert.equal(w.discovery.reason, 'aggregator lookup failed');
+  assert.deepEqual(w.failed_chains, ['arbitrum'], 'every chain was probed: the outage is reported, not hidden');
+  assert.deepEqual(w.chains.map((c) => c.chain), ['base']);
+});
+
+test('multichain discovery: the lookup is a standard 20-credit route', async () => {
+  const { CreditLedger, PLANS } = await import('../dist/blockscout/credits.js');
+  const l = new CreditLedger(PLANS.builder);
+  assert.equal(l.priceOf('/multichain/api/v1/addresses'), 20);
+  assert.equal(l.priceOf('/multichain/api/v1/chains'), 20);
 });
