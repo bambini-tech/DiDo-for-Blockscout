@@ -15,8 +15,10 @@
 export const DEXSCREENER = 'https://api.dexscreener.com';
 export const GECKOTERMINAL = 'https://api.geckoterminal.com/api/v2';
 
+import { CHAINS } from '../chains.js';
+
 /** DexScreener chain id -> GeckoTerminal network id. */
-export const GT_NETWORK: Record<string, string> = { ethereum: 'eth', base: 'base', arbitrum: 'arbitrum', robinhood: 'robinhood' };
+export const GT_NETWORK: Record<string, string> = Object.fromEntries(CHAINS.map((c) => [c.key, c.gt]));
 
 export class Pacer {
   private next = 0;

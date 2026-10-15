@@ -1,0 +1,175 @@
+{
+ "_note": "Every Blockscout PRO API mainnet that DexScreener and GeckoTerminal also cover, checked against live data (see README, Chains). key = DexScreener chainId, gt = GeckoTerminal network, chainId = the Blockscout PRO API chain id.",
+ "chains": [
+  {
+   "key": "ethereum",
+   "name": "Ethereum",
+   "chainId": 1,
+   "label": "ETH",
+   "code": "et",
+   "native": "ETH",
+   "gt": "eth",
+   "explorer": "https://eth.blockscout.com"
+  },
+  {
+   "key": "arbitrum",
+   "name": "Arbitrum One",
+   "chainId": 42161,
+   "label": "ARB",
+   "code": "ar",
+   "native": "ETH",
+   "gt": "arbitrum",
+   "explorer": "https://arbitrum.blockscout.com"
+  },
+  {
+   "key": "arc",
+   "name": "Arc",
+   "chainId": 5042,
+   "label": "ARC",
+   "code": "ac",
+   "native": "USDC",
+   "gt": "arc",
+   "explorer": "https://explorer.arc.io"
+  },
+  {
+   "key": "base",
+   "name": "Base",
+   "chainId": 8453,
+   "label": "BASE",
+   "code": "ba",
+   "native": "ETH",
+   "gt": "base",
+   "explorer": "https://base.blockscout.com"
+  },
+  {
+   "key": "celo",
+   "name": "Celo",
+   "chainId": 42220,
+   "label": "CELO",
+   "code": "ce",
+   "native": "CELO",
+   "gt": "celo",
+   "explorer": "https://celo.blockscout.com"
+  },
+  {
+   "key": "flowevm",
+   "name": "Flow EVM",
+   "chainId": 747,
+   "label": "FLOW",
+   "code": "fl",
+   "native": "FLOW",
+   "gt": "flow-evm",
+   "explorer": "https://evm.flow.com"
+  },
+  {
+   "key": "fuse",
+   "name": "Fuse",
+   "chainId": 122,
+   "label": "FUSE",
+   "code": "fu",
+   "native": "FUSE",
+   "gt": "fuse",
+   "explorer": "https://explorer.fuse.io"
+  },
+  {
+   "key": "ink",
+   "name": "Ink",
+   "chainId": 57073,
+   "label": "INK",
+   "code": "in",
+   "native": "ETH",
+   "gt": "ink",
+   "explorer": "https://explorer.inkonchain.com"
+  },
+  {
+   "key": "megaeth",
+   "name": "MegaETH",
+   "chainId": 4326,
+   "label": "MEGA",
+   "code": "me",
+   "native": "ETH",
+   "gt": "megaeth",
+   "explorer": "https://megaeth.blockscout.com"
+  },
+  {
+   "key": "optimism",
+   "name": "OP Mainnet",
+   "chainId": 10,
+   "label": "OP",
+   "code": "op",
+   "native": "ETH",
+   "gt": "optimism",
+   "explorer": "https://explorer.optimism.io"
+  },
+  {
+   "key": "polygon",
+   "name": "Polygon",
+   "chainId": 137,
+   "label": "POL",
+   "code": "po",
+   "native": "POL",
+   "gt": "polygon_pos",
+   "explorer": "https://polygon.blockscout.com"
+  },
+  {
+   "key": "robinhood",
+   "name": "Robinhood Chain",
+   "chainId": 4663,
+   "label": "RH",
+   "code": "ro",
+   "native": "ETH",
+   "gt": "robinhood",
+   "explorer": "https://robinhoodchain.blockscout.com"
+  },
+  {
+   "key": "scroll",
+   "name": "Scroll",
+   "chainId": 534352,
+   "label": "SCR",
+   "code": "sc",
+   "native": "ETH",
+   "gt": "scroll",
+   "explorer": "https://scrollscan.com"
+  },
+  {
+   "key": "soneium",
+   "name": "Soneium",
+   "chainId": 1868,
+   "label": "SONE",
+   "code": "sn",
+   "native": "ETH",
+   "gt": "soneium",
+   "explorer": "https://soneium.blockscout.com"
+  },
+  {
+   "key": "unichain",
+   "name": "Unichain",
+   "chainId": 130,
+   "label": "UNI",
+   "code": "un",
+   "native": "ETH",
+   "gt": "unichain",
+   "explorer": "https://unichain.blockscout.com"
+  },
+  {
+   "key": "worldchain",
+   "name": "World Chain",
+   "chainId": 480,
+   "label": "WLD",
+   "code": "wc",
+   "native": "ETH",
+   "gt": "world-chain",
+   "explorer": "https://worldchain-mainnet.explorer.alchemy.com"
+  },
+  {
+   "key": "zksync",
+   "name": "ZKsync Era",
+   "chainId": 324,
+   "label": "ZK",
+   "code": "zk",
+   "native": "ETH",
+   "gt": "zksync",
+   "explorer": "https://zksync.blockscout.com"
+  }
+ ]
+}

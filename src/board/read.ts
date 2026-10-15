@@ -15,10 +15,10 @@
 import type { Market, DexPair, Frame } from '../market/market.js';
 import type { Engine, EngineResult } from './engine.js';
 import type { Service } from '../service.js';
-import { chainByKey } from '../chains.js';
+import { CHAINS, chainByKey } from '../chains.js';
 import { basePayload } from '../holders.js';
 
-export const BOARD_CHAINS = ['ethereum', 'base', 'arbitrum', 'robinhood'] as const;
+export const BOARD_CHAINS: readonly string[] = CHAINS.map((c) => c.key);
 
 export const RULES = {
   minLiquidity: 30_000,
@@ -42,7 +42,7 @@ export const LET_GO_REASONS = ['no_pair', 'no_info', 'thin_liquidity', 'too_youn
   'few_trades', 'not_read', 'no_data', 'no_setup', 'above_zone', 'under_zone', 'small_room', 'low_score', 'unchecked', 'concentrated'] as const;
 
 /** Majors and stables trend every day and are never a pick. */
-const SKIP_SYMBOLS = new Set(['WETH', 'ETH', 'USDC', 'USDT', 'DAI', 'USDE', 'USDBC', 'WBTC', 'CBBTC', 'CBETH', 'WSTETH', 'STETH', 'RETH', 'EURC', 'FRAX', 'USDS', 'TBTC', 'LBTC', 'GHO', 'PYUSD', 'USD0', 'WEETH', 'EZETH']);
+const SKIP_SYMBOLS = new Set(['WETH', 'ETH', 'USDC', 'USDT', 'DAI', 'WPOL', 'WMATIC', 'POL', 'WCELO', 'CELO', 'WFLOW', 'WFUSE', 'USDT0', 'USDC.E', 'XDAI', 'USDE', 'USDBC', 'WBTC', 'CBBTC', 'CBETH', 'WSTETH', 'STETH', 'RETH', 'EURC', 'FRAX', 'USDS', 'TBTC', 'LBTC', 'GHO', 'PYUSD', 'USD0', 'WEETH', 'EZETH']);
 
 export interface BoardDoc {
   read_at: number;
@@ -83,7 +83,7 @@ export async function readBoard(deps: ReadDeps): Promise<BoardDoc> {
   // 1. candidates
   const found = new Map<string, { chain: string; address: string; via: string }>();
   const add = (c: { chain: string; address: string; via: string }) => {
-    if (!(BOARD_CHAINS as readonly string[]).includes(c.chain) || !/^0x[0-9a-fA-F]{40}$/.test(c.address)) return;
+    if (!BOARD_CHAINS.includes(c.chain) || !/^0x[0-9a-fA-F]{40}$/.test(c.address)) return;
     const k = `${c.chain}:${c.address.toLowerCase()}`;
     if (!found.has(k)) found.set(k, c);
   };

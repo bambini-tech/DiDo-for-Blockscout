@@ -6,6 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.json VERSION ./
+COPY data ./data
 COPY src ./src
 COPY web ./web
 RUN npm run build && npm prune --omit=dev
@@ -17,6 +18,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 # The board runs the same vendored engine the page does.
 COPY --from=build /app/web/vendor ./web/vendor
+COPY --from=build /app/data ./data
 COPY package.json VERSION ./
 USER node
 EXPOSE 3000

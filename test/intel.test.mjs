@@ -51,7 +51,7 @@ test('base: people only, pools as one LP share, burn left out', async () => {
   assert.equal(body.ok, true);
   const d = body.data;
   assert.equal(d.stage, 'base');
-  assert.equal(d.chain, 'eth', 'DexScreener ethereum maps to eth');
+  assert.equal(d.chain, 'ethereum');
   assert.deepEqual(d.top_owners.map((o) => [o.address, o.pct, o.rank]), [[h1, 15, 1], [h2, 12, 2], [h3, 10, 3], [h4, 8, 4]]);
   assert.equal(d.lp_pct, 30);
   assert.equal(d.burn_pct, 20);

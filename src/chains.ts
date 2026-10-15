@@ -1,26 +1,39 @@
 /**
- * The chains DiDo for Blockscout reads. Every one is served by the Blockscout
- * PRO API's multichain gateway under its EVM chain id, so adding a chain is
- * one entry here -- as long as the id is the real one. A wrong id does not
- * fail loudly: it reads as "this token has no holders".
+ * The chains DiDo for Blockscout reads: every Blockscout PRO API mainnet that
+ * DexScreener and GeckoTerminal also cover, from data/chains.json (the one
+ * list the server, the board, the wallet scan and the page all read).
+ *
+ *   key       DexScreener's chain id -- what the page and the market data key on
+ *   chainId   the EVM chain id -- what the Blockscout PRO API gateway keys on
+ *   gt        GeckoTerminal's network id (candles, trending pools)
+ *   explorer  the chain's Blockscout explorer
+ *
+ * Each entry was checked against live data, never guessed: a wrong id does
+ * not fail loudly, it reads as "this token has no holders". `npm run
+ * verify-chains` re-checks the list.
  */
+import { readFileSync } from 'node:fs';
+
 export interface Chain {
   key: string;
   name: string;
   chainId: number;
+  /** Short tag on chips (BASE, ARB, POL). */
+  label: string;
+  /** Two-letter code in watchlist links. */
+  code: string;
+  /** Native coin symbol (gas). */
+  native: string;
+  gt: string;
   explorer: string;
 }
 
-export const CHAINS: readonly Chain[] = [
-  { key: 'eth', name: 'Ethereum', chainId: 1, explorer: 'https://eth.blockscout.com' },
-  { key: 'base', name: 'Base', chainId: 8453, explorer: 'https://base.blockscout.com' },
-  { key: 'arbitrum', name: 'Arbitrum One', chainId: 42161, explorer: 'https://arbitrum.blockscout.com' },
-  // Arbitrum Orbit L2; Blockscout is its official explorer (mainnet 4663, not testnet 46630).
-  { key: 'robinhood', name: 'Robinhood Chain', chainId: 4663, explorer: 'https://robinhoodchain.blockscout.com' },
-];
+export const CHAINS: readonly Chain[] = (
+  JSON.parse(readFileSync(new URL('../data/chains.json', import.meta.url), 'utf8')) as { chains: Chain[] }
+).chains;
 
-/** DexScreener's chain ids, which the page keys on, mapped to ours. */
-const ALIASES: Record<string, string> = { ethereum: 'eth', rh: 'robinhood', arb: 'arbitrum' };
+/** Other names a URL or a caller may use. */
+const ALIASES: Record<string, string> = { eth: 'ethereum', rh: 'robinhood', arb: 'arbitrum', op: 'optimism', matic: 'polygon', pol: 'polygon', flow: 'flowevm', 'world-chain': 'worldchain' };
 
 export function chainByKey(key: string): Chain | undefined {
   const k = key.toLowerCase();

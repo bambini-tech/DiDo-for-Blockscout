@@ -18,7 +18,9 @@ terminal; this repository is its stand-alone discovery edition: the holder
 map, the wallet journey and the chart, with no trading and no dependency on
 DigitalDon's own backend.
 
-Chains: **Ethereum, Base, Arbitrum One, Robinhood Chain**.
+**17 chains**: every mainnet the Blockscout PRO API serves that DexScreener and
+GeckoTerminal also cover ([list](#chains)), from Ethereum, Base and Arbitrum to
+Polygon, OP Mainnet, Celo, Scroll, ZKsync, Unichain, Robinhood Chain and Arc.
 
 ## What you can do
 
@@ -35,7 +37,7 @@ Chains: **Ethereum, Base, Arbitrum One, Robinhood Chain**.
 - **See the insiders and the snipers.** Role rings on the map: the deployer,
   wallets the deployer funded, wallets that bought in the launch block
   (bundles) or within a minute of it (snipers), and fresh wallets.
-- **Follow a wallet.** Click any holder: its portfolio across all four chains
+- **Follow a wallet.** Click any holder: its portfolio across all 17 chains
   opens beside the map, and any token it holds opens as its own map. Every
   wallet is one click from its page on Blockscout.
 - **Read the chart.** Price, with the analysis engine's entry and exit zones
@@ -63,9 +65,9 @@ gate for the whole process, retries on 429/5xx, and an honest
 | A wallet's NFTs | `GET /{chainId}/api/v2/addresses/{wallet}/nft` |
 | The board's holder check (top 10 share) for every pick | `GET /{chainId}/api/v2/tokens/{token}` + `/holders` |
 
-One key covers all four chains through the multichain gateway
-(`api.blockscout.com/{chainId}/...`). Addresses link to each chain's
-Blockscout explorer: eth, base, arbitrum and robinhoodchain `.blockscout.com`.
+One key covers all 17 chains through the multichain gateway
+(`api.blockscout.com/{chainId}/...`), and every address links to its chain's
+Blockscout explorer.
 
 ```
 browser ──── DiDo page (map, chart, wallet pane)
@@ -82,9 +84,50 @@ and the clusters join it when the walk is done, with a progress line in
 between. Funding traces are cached per wallet and shared across tokens, and
 a finished map is cached for 10 minutes.
 
+## Chains
+
+DiDo runs on every **mainnet the Blockscout PRO API serves** (60 at the last
+check) **that DexScreener and GeckoTerminal also cover**: holders and wallets
+need Blockscout, finding and charting a token needs the other two. That is
+17 chains today:
+
+| Chain | Chain id | DexScreener | GeckoTerminal | Gas | Explorer |
+|---|---|---|---|---|---|
+| Ethereum | 1 | `ethereum` | `eth` | ETH | [eth.blockscout.com](https://eth.blockscout.com) |
+| Arbitrum One | 42161 | `arbitrum` | `arbitrum` | ETH | [arbitrum.blockscout.com](https://arbitrum.blockscout.com) |
+| Arc | 5042 | `arc` | `arc` | USDC | [explorer.arc.io](https://explorer.arc.io) |
+| Base | 8453 | `base` | `base` | ETH | [base.blockscout.com](https://base.blockscout.com) |
+| Celo | 42220 | `celo` | `celo` | CELO | [celo.blockscout.com](https://celo.blockscout.com) |
+| Flow EVM | 747 | `flowevm` | `flow-evm` | FLOW | [evm.flow.com](https://evm.flow.com) |
+| Fuse | 122 | `fuse` | `fuse` | FUSE | [explorer.fuse.io](https://explorer.fuse.io) |
+| Ink | 57073 | `ink` | `ink` | ETH | [explorer.inkonchain.com](https://explorer.inkonchain.com) |
+| MegaETH | 4326 | `megaeth` | `megaeth` | ETH | [megaeth.blockscout.com](https://megaeth.blockscout.com) |
+| OP Mainnet | 10 | `optimism` | `optimism` | ETH | [explorer.optimism.io](https://explorer.optimism.io) |
+| Polygon | 137 | `polygon` | `polygon_pos` | POL | [polygon.blockscout.com](https://polygon.blockscout.com) |
+| Robinhood Chain | 4663 | `robinhood` | `robinhood` | ETH | [robinhoodchain.blockscout.com](https://robinhoodchain.blockscout.com) |
+| Scroll | 534352 | `scroll` | `scroll` | ETH | [scrollscan.com](https://scrollscan.com) |
+| Soneium | 1868 | `soneium` | `soneium` | ETH | [soneium.blockscout.com](https://soneium.blockscout.com) |
+| Unichain | 130 | `unichain` | `unichain` | ETH | [unichain.blockscout.com](https://unichain.blockscout.com) |
+| World Chain | 480 | `worldchain` | `world-chain` | ETH | [worldchain-mainnet.explorer.alchemy.com](https://worldchain-mainnet.explorer.alchemy.com) |
+| ZKsync Era | 324 | `zksync` | `zksync` | ETH | [zksync.blockscout.com](https://zksync.blockscout.com) |
+
+The list lives in one file, `data/chains.json`, read by the server, the
+board, the wallet scan and the page. No id in it was guessed: for each chain
+a GeckoTerminal pool was looked up on DexScreener under that chain's id and
+had to come back as the same pool, with candles. `npm run verify-chains`
+re-runs that check against live data (no key needed), and
+`npm run verify-chains -- --candidates` lists the Blockscout mainnets that
+are not in the file yet.
+
+Left out, for now, because DexScreener does not index them (Blockscout
+does): Gnosis, Ronin, ZetaChain, Mode, Lisk, Astar, Rootstock, Etherlink,
+Immutable zkEVM, IOTA EVM, Zilliqa, Filecoin EVM, Plume, Shape, Arbitrum Nova
+and a few younger chains. The remaining PRO API mainnets have no
+GeckoTerminal market yet, so there would be no candles to chart.
+
 ## The entry board
 
-Every 4 hours the server reads the tokens that are moving on the four
+Every 4 hours the server reads the tokens that are moving on all 17
 chains (GeckoTerminal's trending and top-volume pools, DexScreener's boosts,
 profiles and community takeovers) and runs each through three stages, the
 same ones DiDo's start page shows:

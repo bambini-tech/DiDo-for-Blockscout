@@ -28,12 +28,12 @@ test('the page has nothing inline for the CSP to drop', () => {
 });
 
 test('the page knows exactly the chains the server reads, with the same explorers', () => {
-  const js = read('web/src/dido.js');
-  const supported = JSON.parse(js.match(/const SUPPORTED = new Set\((\[[^\]]*\])\)/)[1].replace(/'/g, '"'));
-  const explorers = Function(`return ${js.match(/const EXPLORERS = (\{[^}]*\})/)[1]}`)();
-  const toKey = (c) => (c === 'ethereum' ? 'eth' : c);
-  assert.deepEqual([...new Set(supported.map(toKey))].sort(), CHAINS.map((c) => c.key).sort());
-  for (const c of CHAINS) assert.equal(explorers[c.key === 'eth' ? 'ethereum' : c.key], c.explorer);
+  const js = read('dist/web/dido.js');
+  const stamped = JSON.parse(js.match(/const CHAINS = (\[.*?\]);\n/)[1]);
+  assert.deepEqual(stamped.map((c) => [c.key, c.gt, c.explorer, c.code, c.label]), CHAINS.map((c) => [c.key, c.gt, c.explorer, c.code, c.label]));
+  assert.equal(new Set(CHAINS.map((c) => c.code)).size, CHAINS.length, 'watchlist codes are unique');
+  assert.equal(new Set(CHAINS.map((c) => c.chainId)).size, CHAINS.length);
+  assert.doesNotMatch(read('web/src/dido.js'), /const SUPPORTED = new Set\(\[/, 'no hand-kept chain list in the page');
 });
 
 test('no private backend in the page: one origin plus the two price APIs', () => {

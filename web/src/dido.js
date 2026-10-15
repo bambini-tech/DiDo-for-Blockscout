@@ -36,19 +36,29 @@
   const DEXSCREENER = 'https://api.dexscreener.com/latest/dex';
   const GECKOTERMINAL = 'https://api.geckoterminal.com/api/v2';
   const JUPITER_CHARTS = 'https://datapi.jup.ag/v2/charts';
-  /* The chains the server reads through the Blockscout PRO API. KEEP IN SYNC
-     with src/chains.ts (test/web.test.mjs fails on drift). Keys are
-     DexScreener chainIds, which is what the price pipeline keys on. */
-  const SUPPORTED = new Set(['ethereum', 'eth', 'base', 'robinhood', 'arbitrum']);
+  /* The chains: every Blockscout PRO API mainnet that DexScreener and
+     GeckoTerminal also cover. Stamped from data/chains.json by web/build.mjs,
+     the same list the server reads, so the page and the server can never
+     disagree on a chain. Keys are DexScreener chainIds, which is what the
+     price pipeline keys on. */
+  const CHAINS = {{CHAINS_JSON}};
+  const SUPPORTED = new Set(CHAINS.map(c => c.key).concat(['eth']));
   /* Every chain here is EVM; kept so the home filter's grouping still reads. */
   const NON_EVM = new Set(['solana']);
-  const GT_CHAIN = { ethereum: 'eth', eth: 'eth', base: 'base', robinhood: 'robinhood', arbitrum: 'arbitrum' };
+  const GT_CHAIN = Object.assign({ eth: 'eth' }, Object.fromEntries(CHAINS.map(c => [c.key, c.gt])));
   /* Aliases a URL is likely to carry in `?c=`. Values are DexScreener
      chainIds, which is what the pipeline keys on. */
-  const CHAIN_ALIASES = { eth: 'ethereum', ethereum: 'ethereum', base: 'base', robinhood: 'robinhood', rh: 'robinhood', arb: 'arbitrum', arbitrum: 'arbitrum' };
+  const CHAIN_ALIASES = Object.assign({ eth: 'ethereum', rh: 'robinhood', arb: 'arbitrum', op: 'optimism', matic: 'polygon', pol: 'polygon', flow: 'flowevm' },
+    Object.fromEntries(CHAINS.map(c => [c.key, c.key])));
   /* Each chain's Blockscout explorer: every address and token DiDo shows is
-     one click from its page there. KEEP IN SYNC with src/chains.ts. */
-  const EXPLORERS = { ethereum: 'https://eth.blockscout.com', eth: 'https://eth.blockscout.com', base: 'https://base.blockscout.com', arbitrum: 'https://arbitrum.blockscout.com', robinhood: 'https://robinhoodchain.blockscout.com' };
+     one click from its page there. */
+  const EXPLORERS = Object.assign({ eth: CHAINS.find(c => c.key === 'ethereum').explorer }, Object.fromEntries(CHAINS.map(c => [c.key, c.explorer])));
+  /* Short tags on the chips. The engine knows a handful of chains by tag and
+     upper-cases the rest ("WORLDCHAIN"); this edition's chains get their own
+     short tags without touching the vendored engine. */
+  const CHAIN_TAGS = Object.fromEntries(CHAINS.map(c => [c.key, c.label]));
+  const engineChainTag = DD.chainTag;
+  DD.chainTag = c => CHAIN_TAGS[String(c || '').toLowerCase()] || engineChainTag(c);
 
   const SEARCH_TIMEOUT_MS = 12000;
   const OHLCV_TIMEOUT_MS = 15000;
@@ -2645,11 +2655,10 @@
      Nothing reaches our backend: prices come from DexScreener in batches of
      30 every 60 s while the panel is open and the tab visible, and a score
      refreshes when the token is opened, which is a read by the engine. */
-  /* KEEP IN SYNC with CC / CC_REV in webapp/index.html (the WL module):
-     two-letter chain codes in list links. tools/check_chain_wiring.py
-     compares the two. */
-  const WL_CC = { solana: 'so', ethereum: 'et', eth: 'et', base: 'ba', bsc: 'bs', robinhood: 'ro', arbitrum: 'ar', mantle: 'ma', arc: 'ac' };
-  const WL_CC_REV = { so: 'solana', et: 'ethereum', ba: 'base', bs: 'bsc', ro: 'robinhood', ar: 'arbitrum', ma: 'mantle', ac: 'arc' };
+  /* Two-letter chain codes in list links, from data/chains.json (DigitalDon's
+     own codes where it has the chain, so its list links open here too). */
+  const WL_CC = Object.assign({ eth: 'et' }, Object.fromEntries(CHAINS.map(c => [c.key, c.code])));
+  const WL_CC_REV = Object.fromEntries(CHAINS.map(c => [c.code, c.key]));
   const WATCH = (() => {
     const KEY = 'dd-watch:v1', VIEW_KEY = 'dido-watch-view:v1', CAP = 50, PRICE_EVERY_MS = 60000;
     const GROUPS = { go: 'in the buy zone', wait: 'waiting for a dip', under: 'fell under the zone', none: 'no buy signal' };

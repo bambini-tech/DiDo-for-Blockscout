@@ -28,8 +28,13 @@ Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page,
   wallets or token info anywhere else, and add no other provider.
 - **`web/vendor/` is never edited here.** It is a byte-for-byte snapshot
   (`web/vendor/SOURCE.md`); the build and `test/web.test.mjs` check it.
-  Adapt DiDo in `web/src/`, and keep its chain list and explorers in sync
-  with `src/chains.ts` (the test fails on drift).
+  Adapt DiDo in `web/src/`.
+- **Chains live in `data/chains.json` only.** The server, board, wallet scan
+  and page (stamped by `web/build.mjs`) all read it; never hand-keep a chain
+  list anywhere else. A chain is added only when it is a Blockscout PRO API
+  mainnet AND `npm run verify-chains` proves its DexScreener and
+  GeckoTerminal ids with live data. Never guess an id: a wrong one reads as
+  "no holders", indistinguishable from an outage.
 - **The page has nothing inline** (no inline script, style or `style=`): it
   ships under `script-src 'self'` / `style-src 'self'`.
 - **No trading, no accounts.** This edition is discovery only.

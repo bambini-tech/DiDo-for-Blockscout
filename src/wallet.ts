@@ -1,6 +1,6 @@
 /**
  * The wallet scan DiDo's wallet pane reads (GET /api/wallet-scan): one
- * wallet across every chain at once, merged into one portfolio.
+ * wallet across every chain at once (all of data/chains.json), merged into one portfolio.
  *
  *   - priced holdings (Blockscout's USD rate) sorted by value, with % of total
  *   - under $1 counted as dust, tokens without a rate counted as unpriced,
@@ -15,17 +15,15 @@ import { CHAINS, type Chain } from './chains.js';
 import type { BlockscoutClient } from './blockscout/client.js';
 import { readWalletChain, type WalletChainRead } from './blockscout/wallet.js';
 
-const LABELS: Record<string, string> = { eth: 'ETH', base: 'BASE', arbitrum: 'ARB', robinhood: 'RH' };
-/** Chain ids as the page keys them (DexScreener's). */
-export const pageChain = (key: string) => (key === 'eth' ? 'ethereum' : key);
 const DUST_USD = 1;
 const MAX_ROWS = 50;
 
 export async function scanWallet(client: BlockscoutClient, wallet: string, chains: readonly Chain[] = CHAINS) {
   const address = wallet.toLowerCase();
   const reads = await Promise.all(chains.map(async (c) => [c, await readWalletChain(client, c.chainId, address)] as const));
-  // Every chain here pays gas in ETH: one ETH price serves a chain whose row lacks it.
-  const ethUsd = reads.map(([, r]) => r.address?.nativeUsd).find((p): p is number => typeof p === 'number') ?? null;
+  // Chains sharing a gas coin share its price: one ETH price serves an ETH chain whose row lacks it.
+  const nativeUsd = new Map<string, number>();
+  for (const [c, r] of reads) if (r.address?.nativeUsd && !nativeUsd.has(c.native)) nativeUsd.set(c.native, r.address.nativeUsd);
 
   const chainsOut = [];
   const empty: string[] = [];
@@ -36,10 +34,10 @@ export async function scanWallet(client: BlockscoutClient, wallet: string, chain
   let nftsMore = false;
 
   for (const [c, r] of reads) {
-    const key = pageChain(c.key);
+    const key = c.key;
     if (r.status === 'error') { failed.push(key); continue; }
     if (!r.address || (r.address.coinWei === 0n && !r.tokens.length && !r.nfts.length)) { empty.push(key); continue; }
-    const rows = chainRows(c, r, ethUsd);
+    const rows = chainRows(c, r, nativeUsd.get(c.native) ?? null);
     const priced = rows.filter((h) => h.usd !== null && h.usd >= DUST_USD);
     const chainDust = rows.filter((h) => h.usd !== null && h.usd < DUST_USD);
     const chainUnpriced = rows.filter((h) => h.usd === null && !h.native).length;
@@ -48,15 +46,15 @@ export async function scanWallet(client: BlockscoutClient, wallet: string, chain
     unpriced += chainUnpriced;
     const tokensUsd = priced.filter((h) => !h.native).reduce((s, h) => s + (h.usd ?? 0), 0);
     const nativeRow = rows.find((h) => h.native);
-    const chainNfts = r.nfts.map((n) => ({ chain: key, chain_label: LABELS[c.key], ...n }));
+    const chainNfts = r.nfts.map((n) => ({ chain: key, chain_label: c.label, ...n }));
     nfts.push(...chainNfts);
     nftsMore ||= r.nftsMore;
     all.push(...priced);
     chainsOut.push({
       chain: key,
       chain_name: c.name,
-      chain_label: LABELS[c.key],
-      native_symbol: 'ETH',
+      chain_label: c.label,
+      native_symbol: c.native,
       is_contract: r.address.isContract,
       name: r.address.name,
       ens: r.address.ens,
@@ -130,14 +128,14 @@ interface Row {
   chain_label: string;
 }
 
-function chainRows(c: Chain, r: WalletChainRead, ethUsd: number | null): Row[] {
-  const key = pageChain(c.key);
-  const label = LABELS[c.key] ?? c.key.toUpperCase();
+function chainRows(c: Chain, r: WalletChainRead, sharedNativeUsd: number | null): Row[] {
+  const key = c.key;
+  const label = c.label;
   const rows: Row[] = [];
   const coin = scale(r.address!.coinWei.toString(), 18);
   if (coin > 0) {
-    const px = r.address!.nativeUsd ?? ethUsd;
-    rows.push({ address: 'native', symbol: 'ETH', name: 'Ether', amount: coin, holders: null, price_usd: px, price_source: px ? 'blockscout' : null,
+    const px = r.address!.nativeUsd ?? sharedNativeUsd;
+    rows.push({ address: 'native', symbol: c.native, name: c.native === 'ETH' ? 'Ether' : c.native, amount: coin, holders: null, price_usd: px, price_source: px ? 'blockscout' : null,
       logo: null, usd: px ? coin * px : null, pnl: null, native: true, chain: key, chain_label: label });
   }
   for (const t of r.tokens) {

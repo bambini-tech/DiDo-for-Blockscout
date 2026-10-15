@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { json, scriptedFetch, makeClient } from './helpers.mjs';
 import { scanWallet } from '../dist/wallet.js';
 import { buildApp } from '../dist/server.js';
+import { CHAINS } from '../dist/chains.js';
+const FOUR = CHAINS.filter((c) => [1, 8453, 42161, 4663].includes(c.chainId));
 
 const W = '0x' + 'c'.repeat(40);
 const [T1, T2, T3, T4, SCAM] = ['1', '2', '3', '4', '5'].map((c) => '0x' + c.repeat(40));
@@ -30,7 +32,7 @@ function fetchFor() {
 }
 
 test('a wallet across every chain: priced, dust, unpriced, scam, empty and failed chains', async () => {
-  const w = await scanWallet(makeClient(fetchFor()), W.toUpperCase().replace('0X', '0x'));
+  const w = await scanWallet(makeClient(fetchFor()), W.toUpperCase().replace('0X', '0x'), FOUR);
   assert.equal(w.address, W);
   assert.deepEqual(w.chains.map((c) => c.chain), ['base']);
   assert.deepEqual(w.empty_chains.sort(), ['ethereum', 'robinhood']);

@@ -40,6 +40,10 @@ if (!/^\d+\.\d+\.\d+$/.test(VERSION)) die(`VERSION must be X.Y.Z, got "${VERSION
 const engine = read(VENDOR, 'engine.js');
 const holderJs = read(VENDOR, 'holdermap.js');
 const holderCss = read(VENDOR, 'holdermap.css');
+// The chains, from the one list the server reads too.
+const CHAINS = JSON.parse(readFileSync(join(ROOT, 'data', 'chains.json'), 'utf8')).chains
+  .map(({ key, name, label, code, gt, explorer }) => ({ key, name, label, code, gt, explorer }));
+if (!CHAINS.length || !CHAINS.some((c) => c.key === 'ethereum')) die('data/chains.json has no chains (or no ethereum)');
 if (!engine.startsWith('/*ENGINE-START*/') || !engine.trimEnd().endsWith('/*ENGINE-END*/')) die('vendor/engine.js lost its markers');
 for (const fn of ['holderFullSectionHtml', 'initHolderMap', 'holderGroupsLine']) {
   if (!holderJs.includes(`function ${fn}`)) die(`vendor/holdermap.js is missing ${fn}()`);
@@ -67,7 +71,9 @@ const stamp = (s) => s
   .split('{{VERSION}}').join(VERSION)
   .split('{{ENGINE_VERSION}}').join(ENGINE_VERSION)
   .split('{{BUILT_AT}}').join(BUILT_AT)
-  .split('{{LOGO_SVG}}').join(logoSvg);
+  .split('{{LOGO_SVG}}').join(logoSvg)
+  .split('{{CHAINS_JSON}}').join(JSON.stringify(CHAINS))
+  .split('{{CHAIN_NAMES}}').join(CHAINS.map((c) => c.name.toLowerCase()).join(' &middot; '));
 
 const banner = `/* DiDo for Blockscout v${VERSION} -- analysis engine ENGINE_VERSION ${ENGINE_VERSION}.
    Built ${BUILT_AT} by web/build.mjs from web/src and web/vendor. */
