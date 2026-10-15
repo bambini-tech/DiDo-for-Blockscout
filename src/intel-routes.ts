@@ -12,7 +12,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { chainByKey, type Chain } from './chains.js';
 import type { Service } from './service.js';
 import { basePayload, fullPayload } from './holders.js';
-import { scanWallet, type Discovery } from './wallet.js';
+import { startWalletScan, type Discovery, type WalletPricer, type WalletScan } from './wallet.js';
 import type { BlockscoutClient } from './blockscout/client.js';
 import { TtlCache } from './cache.js';
 import type { BoardKeeper } from './board/keeper.js';
@@ -28,6 +28,8 @@ export interface IntelOptions {
   client: BlockscoutClient;
   /** How the wallet scan finds a wallet's chains: one multichain lookup (default) or a probe per chain. */
   walletDiscovery?: Discovery;
+  /** Prices the tokens Blockscout has no rate for (DexScreener); null prices from Blockscout alone. */
+  walletPricer?: WalletPricer | null;
   /** The entry board; absent, the page shows no board and no garden. */
   board?: BoardKeeper;
   onMapped?: (chain: Chain, token: string, symbol: string | null, name: string | null, priceUsd: number | null) => void;
@@ -88,32 +90,64 @@ export function registerIntel(app: FastifyInstance, service: Service, opts: Inte
     return ok(reply, opts.board.doc);
   });
 
-  // The wallet journey: one wallet across every chain. `defer` and `/pnl` are
-  // accepted for the page's sake; this edition computes no cost basis.
+  // The wallet journey: one wallet across every chain. `defer=1` answers as
+  // soon as balances, prices and NFTs are in (`pnl_pending`), while the cost
+  // basis books; /pnl then hands over the finished scan. /pnl never starts a
+  // read of its own, so it needs no rate limit: with nothing to hand over it
+  // answers `not_pending` and the page asks for the full scan.
   const walletLimit = new IpLimiter(opts.walletScansPerMinute ?? 10, 60_000);
-  const wallets = new TtlCache<Awaited<ReturnType<typeof scanWallet>>>(2 * 60_000, 500);
-  const walletInflight = new Map<string, ReturnType<typeof scanWallet>>();
-  const walletScan = async (req: FastifyRequest, reply: FastifyReply) => {
-    const address = String((req.query as Record<string, string>).address ?? '').trim().toLowerCase();
+  const wallets = new TtlCache<WalletScan>(2 * 60_000, 500);
+  // Every finished scan, for /pnl to hand over: a card's basis must not cost a second scan.
+  const handoff = new TtlCache<WalletScan>(2 * 60_000, 500);
+  const scans = new Map<string, Promise<{ card: WalletScan; finished: Promise<WalletScan> | null }>>();
+  const PNL_WAIT_MS = 55_000;
+  const allFailed = (d: WalletScan) => d.failed_chains.length > 0 && !d.chains.length && !d.empty_chains.length;
+  const sendScan = (reply: FastifyReply, d: WalletScan) => (allFailed(d)
+    ? reply.code(502).header('Cache-Control', 'no-store').send({ ok: false, error: 'internal', detail: 'Blockscout could not be read on any chain right now.', data: null })
+    : ok(reply, d));
+  const start = (address: string) => {
+    const job = startWalletScan(opts.client, address, undefined, opts.walletDiscovery ?? 'multichain', { pricer: opts.walletPricer ?? null });
+    scans.set(address, job);
+    void job.then(({ card, finished }) => (finished ?? Promise.resolve(card)).then((full) => {
+      handoff.set(address, full);
+      // A scan with a chain that could not be read is not kept: the next visit reads again.
+      if (!full.failed_chains.length) wallets.set(address, full);
+    })).catch(() => undefined).finally(() => scans.delete(address));
+    return job;
+  };
+
+  app.get('/api/wallet-scan', async (req, reply) => {
+    const q = req.query as Record<string, string>;
+    const address = String(q.address ?? '').trim().toLowerCase();
     if (!ADDRESS.test(address)) return reply.code(400).send({ ok: false, error: 'invalid_address', detail: 'that is not an EVM address.', data: null });
     if (!opts.configured) return fail(reply, 'not_configured');
     const hit = wallets.get(address);
     if (hit) return ok(reply, hit);
-    let job = walletInflight.get(address);
+    let job = scans.get(address);
     if (!job) {
       if (!walletLimit.take(req.ip)) return fail(reply, 'rate_limited');
-      job = scanWallet(opts.client, address, undefined, opts.walletDiscovery ?? 'multichain').finally(() => walletInflight.delete(address));
-      walletInflight.set(address, job);
+      job = start(address);
     }
-    const data = await job;
-    if (data.failed_chains.length === data.chains.length + data.empty_chains.length + data.failed_chains.length) {
-      return reply.code(502).send({ ok: false, error: 'internal', detail: 'Blockscout could not be read on any chain right now.', data: null });
+    const { card, finished } = await job;
+    if (q.defer === '1' || q.defer === 'true' || !finished) return sendScan(reply, card);
+    return sendScan(reply, await finished);
+  });
+
+  app.get('/api/wallet-scan/pnl', async (req, reply) => {
+    const address = String((req.query as Record<string, string>).address ?? '').trim().toLowerCase();
+    if (!ADDRESS.test(address)) return reply.code(400).send({ ok: false, error: 'invalid_address', detail: 'that is not an EVM address.', data: null });
+    const job = scans.get(address);
+    if (job) {
+      const { card, finished } = await job;
+      let timer: NodeJS.Timeout | undefined;
+      const late = new Promise<null>((r) => { timer = setTimeout(() => r(null), PNL_WAIT_MS); });
+      const full = await Promise.race([finished ?? Promise.resolve(card), late]).finally(() => clearTimeout(timer));
+      return full ? sendScan(reply, full) : reply.code(504).header('Cache-Control', 'no-store').send({ ok: false, error: 'timeout', data: null });
     }
-    if (!data.failed_chains.length) wallets.set(address, data);
-    return ok(reply, data);
-  };
-  app.get('/api/wallet-scan', walletScan);
-  app.get('/api/wallet-scan/pnl', walletScan);
+    const hit = wallets.get(address) ?? handoff.get(address);
+    if (hit) return sendScan(reply, hit);
+    return reply.code(404).header('Cache-Control', 'no-store').send({ ok: false, error: 'not_pending', data: null });
+  });
 }
 
 /** A fixed-window counter per IP. */

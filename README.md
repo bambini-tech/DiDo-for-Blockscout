@@ -10,7 +10,8 @@ Every holder, cluster, wallet and token fact comes from the
 server. Market data (which tokens are moving, their prices and candles) comes
 from DexScreener and GeckoTerminal, because that is the one thing an explorer
 does not carry: the price chart reads it in the viewer's browser, the start
-page's entry board on the server.
+page's entry board and the wallet scan's prices for tokens Blockscout has no
+rate for on the server.
 
 Built for the [Blockscout PRO API Buildathon](https://craftora.tech/sprints/blockscout-pro-api-buildathon/)
 by the team behind [DigitalDon](https://digitaldon.net). DiDo is DigitalDon's
@@ -39,8 +40,9 @@ Polygon, OP Mainnet, Celo, Scroll, ZKsync, Unichain, Robinhood Chain and Arc.
   wallets the deployer funded, wallets that bought in the launch block
   (bundles) or within a minute of it (snipers), and fresh wallets.
 - **Follow a wallet.** Click any holder: its portfolio across all 17 chains
-  opens beside the map, and any token it holds opens as its own map. Every
-  wallet is one click from its page on Blockscout.
+  opens beside the map, with what each position cost (booked from the
+  wallet's own Blockscout history), and any token it holds opens as its own
+  map. Every wallet is one click from its page on Blockscout.
 - **Read the chart.** Price, with the analysis engine's entry and exit zones
   drawn on it, and the holders' funding replayed on the time axis.
 - **Keep a watchlist**, kept in your browser only.
@@ -65,6 +67,7 @@ gate for the whole process, retries on 429/5xx, and an honest
 | A wallet's tokens and their USD value | `GET /{chainId}/api/v2/addresses/{wallet}/token-balances` |
 | A wallet's transaction count | `GET /{chainId}/api/v2/addresses/{wallet}/counters` |
 | A wallet's NFTs | `GET /{chainId}/api/v2/addresses/{wallet}/nft` |
+| What a wallet paid for each token (cost basis) | `GET /v2/api?module=account&action=txlist`, `txlistinternal` and `tokentx`, oldest first, 10,000 rows in one request each |
 | The board's holder check (top 10 share) for every pick | `GET /{chainId}/api/v2/tokens/{token}` + `/holders` |
 
 One key covers all 17 chains through the multichain gateway
@@ -157,11 +160,11 @@ second, 100k credits a day, 50 holders traced instead of 100).
 | Holders (the map's first answer) | 3 | 60 |
 | Full map, first look (100 holders traced, launch, deployer, shared funders) | ~130–350 (BRETT on Base: 346) | ~2,600–7,000 |
 | The same token again within 10 minutes | 0 | 0 |
-| Wallet scan (one multichain lookup, then 4 per chain it is on) | ~5–15 | ~100–300 |
-| Wallet scan without the aggregator (`WALLET_DISCOVERY=probe`, or if it is down) | ~20–30 | ~400–600 |
+| Wallet scan (one multichain lookup, then 4 per chain it is on, 3 more per chain with priced tokens for the cost basis) | ~5–25 | ~100–500 |
+| Wallet scan without the aggregator (`WALLET_DISCOVERY=probe`, or if it is down) | ~20–40 | ~400–800 |
 | Entry board round (holder checks for the picks) | ~10–40 | ~200–800 |
 
-On 100M credits that is roughly 25,000 first-look maps or 400,000 wallet
+On 100M credits that is roughly 25,000 first-look maps or 200,000 wallet
 scans a month.
 
 **The wallet scan asks Blockscout's multichain aggregator first.** One
@@ -170,7 +173,22 @@ aggregator refuses a request naming a chain it does not index, so it is
 asked only about the chains it lists (read once a day), and any of DiDo's
 chains it does not index are still probed directly. If the aggregator cannot
 be read, every chain is probed: a wallet is never thinner for it. The answer
-says which way it went (`discovery`).
+says which way it went (`discovery`). A chain where Blockscout reports no
+token at all (`has_tokens: false`) costs one request there.
+
+**Prices and cost basis.** A token is valued at Blockscout's own USD rate.
+Where Blockscout has none (on most L2s it rates only the majors), DiDo looks
+the token up on DexScreener: the deepest pool where the token is the base
+side, never one where it is quoted. A token neither can price is counted as
+unpriced and left out of the total; airdropped spam is unpriced almost by
+definition. The cost basis is booked from the wallet's own history: a
+transaction that paid the gas coin, its wrapped form or a stablecoin and
+received exactly one token is a buy at that amount, valued at today's gas
+coin price (so a position bought with ETH has an exact percentage). A token
+that arrived without a readable payment (an airdrop, a bridge, a swap from
+another token) gets no basis rather than a guessed one, and the total says
+how much of the portfolio it covers. The card goes out as soon as balances
+and prices are in; the basis follows.
 
 ## The entry board
 
@@ -302,7 +320,7 @@ test/                    node:test suites
 - [x] Live deployment and demo
 
 **Sprint 2 (Oct 25–31)**: token security from the verified contract
-(mint, owner, proxy), cost basis in the wallet pane, more chains, and
+(mint, owner, proxy), more chains, and
 whatever the Sprint 1 feedback asks for.
 
 Not financial advice.

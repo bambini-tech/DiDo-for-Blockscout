@@ -38,9 +38,10 @@ test('a wallet across every chain: priced, dust, unpriced, scam, empty and faile
   assert.deepEqual(w.empty_chains.sort(), ['ethereum', 'robinhood']);
   assert.deepEqual(w.failed_chains, ['arbitrum'], 'an outage is never "holds nothing"');
   assert.deepEqual(w.holdings.map((h) => [h.symbol, Math.round(h.usd), Math.round(h.pct)]), [['ETH', 5000, 83], ['BIG', 1000, 17]]);
-  assert.equal(w.total_usd, 6000);
-  assert.equal(w.tokens_usd, 1000);
+  assert.equal(Math.round(w.total_usd), 6000, 'dust is in the total, only folded out of the list');
+  assert.equal(Math.round(w.tokens_usd), 1000);
   assert.equal(w.native_usd, 5000);
+  assert.equal(w.holdings[0].address, null, 'a gas coin has no contract');
   assert.equal(w.dust, 1);
   assert.equal(w.unpriced, 1);
   assert.ok(!w.holdings.some((h) => h.symbol === 'FREE'), 'scam tokens are left out');
@@ -50,6 +51,8 @@ test('a wallet across every chain: priced, dust, unpriced, scam, empty and faile
   assert.equal(w.nfts_more, true);
   assert.equal(w.pnl, null);
   assert.equal(w.pnl_pending, false);
+  assert.ok(w.notes.includes('BASE: cost basis unavailable'), 'a history that could not be read is said, not hidden');
+  assert.ok(w.notes.some((n) => n.startsWith('ARB: could not be read')));
   assert.equal(w.chains[0].native.usd, 5000);
   assert.equal(w.chains[0].chain_label, 'BASE');
 });
@@ -62,9 +65,16 @@ test('route: envelope, bad address, cache, and a failed chain is not cached', as
   assert.equal(bad.json().error, 'invalid_address');
   const r = await app.inject(`/api/wallet-scan?address=${W}&defer=1`);
   assert.equal(r.json().ok, true);
+  assert.equal(r.json().data.pnl_pending, true, 'the card goes out while the basis books');
+  const done = await app.inject(`/api/wallet-scan/pnl?address=${W}`);
+  assert.equal(done.json().data.pnl_pending, false);
+  await new Promise((res) => setImmediate(res));
   const n = f.seen.length;
-  await app.inject(`/api/wallet-scan/pnl?address=${W}`);
+  await app.inject(`/api/wallet-scan?address=${W}`);
   assert.ok(f.seen.length > n, 'a scan with a failed chain is read again next time');
+  const none = await app.inject(`/api/wallet-scan/pnl?address=${'0x' + 'f'.repeat(40)}`);
+  assert.equal(none.statusCode, 404);
+  assert.equal(none.json().error, 'not_pending', '/pnl never starts a scan of its own');
 });
 
 test('route: every chain down is an error, not an empty wallet', async () => {
@@ -96,7 +106,7 @@ test('multichain discovery: one lookup, then only the chains the wallet is on (p
   assert.deepEqual(w.empty_chains.sort(), ['arbitrum', 'ethereum', 'robinhood']);
   assert.deepEqual(w.failed_chains, []);
   assert.deepEqual(w.discovery, { via: 'multichain', found_on: 1, probed: 1, skipped: 2 });
-  assert.equal(w.total_usd, 6000, 'the same wallet as the full probe');
+  assert.equal(Math.round(w.total_usd), 6000, 'the same wallet as the full probe');
 });
 
 test('multichain discovery: an aggregator failure falls back to probing every chain', async () => {
@@ -121,4 +131,89 @@ test('multichain discovery: the lookup is a standard 20-credit route', async () 
   const l = new CreditLedger(PLANS.builder);
   assert.equal(l.priceOf('/multichain/api/v1/addresses'), 20);
   assert.equal(l.priceOf('/multichain/api/v1/chains'), 20);
+});
+
+// Base: 2 ETH; BIG bought for 1 ETH in one transaction; NOPX airdropped (no cash leg);
+// an advert NFT; DexScreener knows NOPX (base side) and quotes another token against it.
+function richFetch() {
+  const tx = (hash, extra) => ({ hash, timeStamp: '100', isError: '0', ...extra });
+  return scriptedFetch([
+    [(u) => !u.pathname.startsWith('/8453/') && u.pathname !== '/v2/api', json({ message: 'Not found' }, 404)],
+    [(u) => u.pathname === `/8453/api/v2/addresses/${W}`, json({ coin_balance: e18(2), exchange_rate: '2500', has_tokens: true })],
+    [(u) => u.pathname === `/8453/api/v2/addresses/${W}/counters`, json({ transactions_count: '3' })],
+    [(u) => u.pathname === `/8453/api/v2/addresses/${W}/token-balances`, json([
+      { token: token(T1, 'BIG', '10'), value: e18(100) },
+      { token: token(T3, 'NOPX', null), value: e18(7) },
+    ])],
+    [(u) => u.pathname === `/8453/api/v2/addresses/${W}/nft`, json({ items: [
+      { id: '1', token_type: 'ERC-721', value: '1', image_url: null, metadata: { name: 'Claim your reward at x.com' }, token: token(T4, 'ADV', null, { type: 'ERC-721', name: 'Visit' }) },
+      { id: '2', token_type: 'ERC-721', value: '1', image_url: null, metadata: null, token: token(T2, 'ART', null, { type: 'ERC-721', name: 'Art' }) },
+    ] })],
+    [(u) => u.pathname === '/v2/api' && u.searchParams.get('action') === 'txlist', json({ status: '1', result: [tx('0xa', { from: W, to: '0x' + '9'.repeat(40), value: e18(1) })] })],
+    [(u) => u.pathname === '/v2/api' && u.searchParams.get('action') === 'txlistinternal', json({ status: '0', message: 'No transactions found', result: [] })],
+    [(u) => u.pathname === '/v2/api' && u.searchParams.get('action') === 'tokentx', json({ status: '1', result: [
+      tx('0xa', { from: '0x' + '9'.repeat(40), to: W, value: e18(100), contractAddress: T1, tokenSymbol: 'BIG', tokenDecimal: '18' }),
+      tx('0xb', { from: '0x' + '8'.repeat(40), to: W, value: e18(7), contractAddress: T3, tokenSymbol: 'NOPX', tokenDecimal: '18' }),
+    ] })],
+  ]);
+}
+const BASE = CHAINS.filter((c) => c.chainId === 8453);
+const pricer = (asked = []) => ({
+  async pairs(chain, addresses) {
+    asked.push([chain, addresses]);
+    return [
+      { chainId: 'base', baseToken: { address: T3, symbol: 'NOPX' }, priceUsd: '3', liquidity: { usd: 50000 }, info: { imageUrl: 'https://cdn.dexscreener.com/n.png' } },
+      { chainId: 'base', baseToken: { address: T3, symbol: 'NOPX' }, priceUsd: '99', liquidity: { usd: 10 } },
+      { chainId: 'base', baseToken: { address: T2, symbol: 'OTHER' }, quoteToken: { address: T1 }, priceUsd: '5000', liquidity: { usd: 1e6 } },
+    ];
+  },
+});
+
+test('tokens Blockscout cannot price are priced on DexScreener: deepest pool, base side only', async () => {
+  const asked = [];
+  const w = await scanWallet(makeClient(richFetch()), W, BASE, 'probe', { pricer: pricer(asked), pnl: false });
+  assert.deepEqual(asked[0][0], 'base');
+  assert.equal(asked[0][1][0], T3, 'the unpriced token is looked up first');
+  const nopx = w.holdings.find((h) => h.symbol === 'NOPX');
+  assert.equal(nopx.price_usd, 3, 'the deepest pool, not the shallow one');
+  assert.equal(nopx.price_source, 'dexscreener');
+  assert.equal(nopx.logo, 'https://cdn.dexscreener.com/n.png');
+  assert.equal(w.holdings.find((h) => h.symbol === 'BIG').price_usd, 10, "a quote-side pool never prices a token, and Blockscout's rate stands");
+  assert.equal(w.unpriced, 0);
+  assert.equal(Math.round(w.total_usd), 5000 + 1000 + 21);
+});
+
+test('cost basis from the wallet history: a buy paid in the gas coin, an airdrop without one', async () => {
+  const w = await scanWallet(makeClient(richFetch()), W, BASE, 'probe', { pricer: pricer() });
+  const big = w.holdings.find((h) => h.symbol === 'BIG');
+  assert.equal(Math.round(big.pnl.basis_usd), 2500, '1 ETH at today\'s 2,500');
+  assert.equal(Math.round(big.pnl.pct), -60);
+  assert.equal(w.holdings.find((h) => h.symbol === 'NOPX').pnl, null, 'no payment seen: no basis, never a free one');
+  assert.equal(w.pnl.positions, 1);
+  assert.equal(w.pnl.positions_total, 2);
+  assert.equal(Math.round(w.pnl.coverage_pct), Math.round((1000 / 1021) * 100));
+  assert.deepEqual(w.pnl.chains, ['base']);
+});
+
+test('the card goes out before the basis; adverts among the NFTs are counted, not shown', async () => {
+  const { startWalletScan } = await import('../dist/wallet.js');
+  const { card, finished } = await startWalletScan(makeClient(richFetch()), W, BASE, 'probe', { pricer: pricer() });
+  assert.equal(card.pnl_pending, true);
+  assert.equal(card.holdings.find((h) => h.symbol === 'BIG').pnl, null);
+  const full = await finished;
+  assert.ok(full.holdings.find((h) => h.symbol === 'BIG').pnl, 'booked on the finished scan');
+  assert.equal(card.holdings.find((h) => h.symbol === 'BIG').pnl, null, 'the card already out is never changed');
+  assert.deepEqual(full.nfts.map((n) => n.collection), ['Art']);
+  assert.equal(full.nfts[0].name, 'Art #2');
+  assert.equal(full.nfts_hidden, 1);
+});
+
+test('has_tokens false: no token or NFT reads on that chain', async () => {
+  const f = scriptedFetch([
+    [(u) => u.pathname === `/8453/api/v2/addresses/${W}`, json({ coin_balance: e18(1), exchange_rate: '2500', has_tokens: false })],
+    [(u) => u.pathname === `/8453/api/v2/addresses/${W}/counters`, json({ transactions_count: '1' })],
+  ]);
+  const w = await scanWallet(makeClient(f), W, BASE, 'probe');
+  assert.equal(w.total_usd, 2500);
+  assert.ok(!f.seen.some((u) => /token-balances|\/nft|\/v2\/api/.test(u.pathname)), 'nothing read that cannot exist');
 });

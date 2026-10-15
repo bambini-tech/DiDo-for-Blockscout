@@ -8,6 +8,8 @@
  *                   (/latest/dex/pairs/{key}/{pool}) -- the id is proven by
  *                   data, not by its spelling
  *   4. GeckoTerminal that pool has hourly candles (what the engine reads)
+ *   5. DexScreener  the wrapped gas coin (`wrapped`) trades on the chain under
+ *                   the gas coin's symbol or its W- form
  *
  * Usage: npm run verify-chains [-- --candidates]
  *   --candidates  also list PRO API mainnets that are NOT in the file, with
@@ -60,6 +62,15 @@ for (const c of chains) {
   else {
     const oh = await get(`https://api.geckoterminal.com/api/v2/networks/${c.gt}/pools/${proven}/ohlcv/hour?aggregate=1&limit=24&currency=usd`, { gt: true });
     if (!(oh?.data?.attributes?.ohlcv_list ?? []).length) problems.push('no candles on GeckoTerminal');
+  }
+  if (c.wrapped) {
+    // The gas coin's ERC-20 (cash in the wallet scan's cost basis): a pool on
+    // this chain must carry it, under the gas coin's symbol or its W- form.
+    const rows = (await get(`https://api.dexscreener.com/tokens/v1/${c.key}/${c.wrapped}`)) ?? [];
+    const names = new Set([c.native, `W${c.native}`].map((x) => x.toUpperCase()));
+    const ok = rows.some((r) => r.chainId === c.key && [r.baseToken, r.quoteToken]
+      .some((t) => (t?.address ?? '').toLowerCase() === c.wrapped && names.has((t?.symbol ?? '').toUpperCase())));
+    if (!ok) problems.push(`wrapped ${c.native} ${c.wrapped} not found on DexScreener under "${c.key}"`);
   }
   if (problems.length) failed++;
   console.log(`${problems.length ? 'FAIL' : 'ok  '} ${String(c.chainId).padEnd(7)} ${c.name.padEnd(16)} ${problems.join('; ')}`);

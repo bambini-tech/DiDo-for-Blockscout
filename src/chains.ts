@@ -7,6 +7,8 @@
  *   chainId   the EVM chain id -- what the Blockscout PRO API gateway keys on
  *   gt        GeckoTerminal's network id (candles, trending pools)
  *   explorer  the chain's Blockscout explorer
+ *   wrapped   the gas coin's ERC-20: cash in the wallet scan's cost basis,
+ *             and the gas coin's price when Blockscout has none
  *
  * Each entry was checked against live data, never guessed: a wrong id does
  * not fail loudly, it reads as "this token has no holders". `npm run
@@ -26,6 +28,8 @@ export interface Chain {
   native: string;
   gt: string;
   explorer: string;
+  /** The gas coin's ERC-20 (WETH, WPOL, ...), lowercase; null where the gas coin is a stablecoin. */
+  wrapped: string | null;
 }
 
 export const CHAINS: readonly Chain[] = (

@@ -100,13 +100,13 @@ export class BlockscoutClient {
       for (const one of Array.isArray(v) ? v : [v]) url.searchParams.append(k, String(one));
     }
     const res = await this.request(url, `Multichain ${path}`);
-    if (!res) return { data: null, status: 'error' };
+    if (!res) return { data: null, status: 'error', detail: 'no answer' };
     if (res.status === 404) return { data: null, status: 'absent' };
-    if (res.status !== 200) return { data: null, status: 'error' };
+    if (res.status !== 200) return { data: null, status: 'error', detail: `HTTP ${res.status}` };
     try {
       return { data: (await res.json()) as T, status: 'ok' };
     } catch {
-      return { data: null, status: 'error' };
+      return { data: null, status: 'error', detail: 'unreadable answer' };
     }
   }
 
