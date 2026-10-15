@@ -8,15 +8,35 @@
  */
 import type { BlockscoutClient, Status } from './client.js';
 
-/** The contract's deployer, from `creator_address_hash`. */
+/** The contract's deployer and creation transaction, from its address row. */
 export async function getCreator(
   client: BlockscoutClient,
   chainId: number,
   contract: string,
-): Promise<{ creator: string | null; status: Status }> {
-  const { data, status } = await client.rest<{ creator_address_hash?: string | null }>(chainId, `addresses/${contract}`);
-  if (status !== 'ok' || !data) return { creator: null, status: status === 'ok' ? 'error' : status };
-  return { creator: data.creator_address_hash ? data.creator_address_hash.toLowerCase() : null, status: 'ok' };
+): Promise<{ creator: string | null; creationTx: string | null; status: Status }> {
+  const { data, status } = await client.rest<{ creator_address_hash?: string | null; creation_transaction_hash?: string | null; creation_tx_hash?: string | null }>(
+    chainId, `addresses/${contract}`);
+  if (status !== 'ok' || !data) return { creator: null, creationTx: null, status: status === 'ok' ? 'error' : status };
+  const tx = data.creation_transaction_hash ?? data.creation_tx_hash ?? null;
+  return {
+    creator: data.creator_address_hash ? data.creator_address_hash.toLowerCase() : null,
+    creationTx: tx ? tx.toLowerCase() : null,
+    status: 'ok',
+  };
+}
+
+/** A transaction's block and time (REST v2 `/transactions/{hash}`). */
+export async function getTxBlock(
+  client: BlockscoutClient,
+  chainId: number,
+  hash: string,
+): Promise<{ block: number | null; ts: number | null; status: Status }> {
+  const { data, status } = await client.rest<{ block_number?: number | string; block?: number | string; timestamp?: string }>(
+    chainId, `transactions/${hash}`);
+  if (status !== 'ok' || !data) return { block: null, ts: null, status: status === 'ok' ? 'error' : status };
+  const block = toNum(data.block_number ?? data.block);
+  const ms = data.timestamp ? Date.parse(data.timestamp) : NaN;
+  return { block, ts: Number.isFinite(ms) ? Math.floor(ms / 1000) : null, status: 'ok' };
 }
 
 /** Lifetime transaction count, from `/addresses/{a}/counters`. */
@@ -56,6 +76,10 @@ export interface FundingTrace {
    */
   kind: FundingKind | null;
   firstTs: number | null;
+  /** Plain transactions read (at most the window). */
+  txCount: number;
+  /** True when the window was full: the wallet has at least that many transactions. */
+  windowFull: boolean;
   /** Every native in/outflow in the window: the wallet's counterparties. */
   flows: Flow[];
 }
@@ -84,7 +108,7 @@ export async function traceFunding(
   window = 20,
 ): Promise<FundingTrace> {
   const me = wallet.toLowerCase();
-  const out: FundingTrace = { wallet: me, status: 'ok', funder: null, kind: null, firstTs: null, flows: [] };
+  const out: FundingTrace = { wallet: me, status: 'ok', funder: null, kind: null, firstTs: null, txCount: 0, windowFull: false, flows: [] };
 
   const txs = await client.etherscan<RawTx[]>(chainId, {
     module: 'account', action: 'txlist', address: me, sort: 'asc', page: 1, offset: window,
@@ -92,6 +116,8 @@ export async function traceFunding(
   if (txs.status !== 'ok' || !Array.isArray(txs.data)) return { ...out, status: 'error' };
   const list = txs.data;
   out.firstTs = toNum(list[0]?.timeStamp);
+  out.txCount = list.length;
+  out.windowFull = list.length >= window;
 
   let funding: Flow | null = null;
   for (const tx of list) {

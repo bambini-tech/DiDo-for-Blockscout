@@ -71,6 +71,15 @@ test('identical amounts need three wallets; two is coincidence', () => {
   assert.equal(three.clusters[0].members.length, 3);
 });
 
+test('round amounts are not a fingerprint: an exchange pays 0.01 ETH to thousands', () => {
+  const r = run([holder(H1, 3), holder(H2, 2), holder(H3, 1)], [
+    trace(H1, [inflow(X, '10000000000000000', 1, 1)]),
+    trace(H2, [inflow(X, '10000000000000000', 2, 100000)]),
+    trace(H3, [inflow(X, '10000000000000000', 3, 200000)]),
+  ], { txCounts: { [X]: 9e6 } });
+  assert.equal(r.clusters.length, 0);
+});
+
 test('funded together: three within the window; windows anchor and never chain', () => {
   const r = run([holder(H1, 4), holder(H2, 3), holder(H3, 2), holder(H4, 1)], [
     trace(H1, [inflow(X, 1, 1, 1000)]),

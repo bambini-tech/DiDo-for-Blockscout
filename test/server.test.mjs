@@ -98,7 +98,8 @@ test('clusters: holders + deployer + traces + sender counts, end to end', async 
   assert.equal(body.deployer.address, d);
   assert.deepEqual(body.analysis.clusters, [{ id: 1, members: [h1, h2], share: 50, reasons: ['shared funder'] }]);
   assert.equal(body.analysis.wallets[h3].deployerFunded, true);
-  assert.equal(body.analysis.wallets[pool].trace, 'skipped', 'named pool is not traced');
+  assert.deepEqual(body.pools, [pool], 'a named pool is set aside: never traced or linked');
+  assert.equal(body.analysis.wallets[pool], undefined);
   assert.equal(body.analysis.stats.deployerLinkedShare, 10);
   assert.equal(body.holders.length, 4, 'the token payload rides along for the map');
   const traced = f.seen.filter((u) => u.searchParams.get('action') === 'txlist').map((u) => u.searchParams.get('address'));
