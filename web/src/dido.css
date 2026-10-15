@@ -745,7 +745,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--ink); outli
    frosted glass and turned right down: drawn small, softened by one blur,
    moving at a sixth of the website's pace, redrawn about six times a second.
    The water's light and two blooms under it take the colours of the token on
-   screen, read from its logo (bot /api/token-tint); a logo without a clear
+   screen, read from its logo (server /api/token-tint); a logo without a clear
    colour leaves the website's own plain light. The pointer stirs it, far more
    gently than on the website.
    The fourth documented exception to the monochrome rule (CLAUDE.md): it is
@@ -809,7 +809,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--ink); outli
   background: var(--ink); vertical-align: 1px; animation: dd-pulse 1.4s ease-in-out infinite;
 }
 .dd-mapstate[data-state="failed"] { color: var(--mute); border-style: dashed; }
-/* The progress bar: the bot's own count of traced wallets, weighted by what
+/* The progress bar: the server's own count of traced wallets, weighted by what
    each phase costs. Grows smoothly between polls. */
 .dd-mapstate { display: grid; gap: 6px; max-width: min(360px, calc(100% - 24px)); border-radius: 14px; }
 .dd-mapstate__bar { display: block; height: 3px; border-radius: 3px; background: var(--hair); overflow: hidden; }
@@ -1042,7 +1042,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--ink); outli
 /* ---------- the welcome ----------
    The field before a token: a greeting with the state of the viewer's book,
    the search under it, then shelves of glass cards (recent tokens, the
-   watchlist, what the bot's groups called most). Monochrome: emphasis by
+   watchlist, what was mapped here most). Monochrome: emphasis by
    weight and opacity; the only tints are the watchlist's verdict washes,
    reused as the panel uses them. The token logos are the tokens' own.
    Since 0.26.0 the search lives in the band on the home too, and the home
@@ -1330,7 +1330,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--ink); outli
   .dd-hs.is-fly[data-view="cards"] .dd-hs__cards .dd-hc { animation: none; }
 }
 
-/* ---------- the garden (DIDO_HOME_PLAN.md phase 3) ----------
+/* ---------- the garden (dormant without an entry board) ----------
    Every token the entry board read, drawn in the stage's field (0.25.0;
    before, a canvas under the whole welcome with the shelves rising over it
    in a sheet). */
@@ -1553,3 +1553,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--ink); outli
 {{HOLDERMAP_CSS}}
 
 
+
+/* DiDo for Blockscout: the stage's intro when there is no entry board. */
+.dd-shelf__note.is-intro { border-style: solid; color: var(--ink); font-size: 13px; line-height: 1.55; }
+.dd-shelf__note.is-intro b { display: block; font-size: 17px; font-weight: 600; margin-bottom: 4px; }

@@ -79,6 +79,7 @@ export function registerWeb(app: FastifyInstance, opts: WebOptions): { built: bo
   });
   app.get('/api/features', async () => ({ ok: true, error: null, data: features() }));
   app.get('/version', async (_req, reply) => serve(reply, 'manifest.json', { 'Cache-Control': 'no-cache' }));
+  app.get('/favicon.ico', async (_req, reply) => reply.code(204).header('Cache-Control', 'public, max-age=86400').send());
 
   const page = async (req: FastifyRequest, reply: FastifyReply) =>
     serve(reply, 'index.html', { 'Content-Security-Policy': PAGE_CSP, 'Cache-Control': 'public, max-age=60, must-revalidate' }, req);

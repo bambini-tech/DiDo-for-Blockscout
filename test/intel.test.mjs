@@ -127,3 +127,11 @@ test('IpLimiter: a fixed window per IP', () => {
   t = 1001;
   assert.equal(l.take('a'), true);
 });
+
+test('behind one proxy hop, each visitor gets their own limit', async () => {
+  const a = app({ scansPerMinute: 1, trustProxyHops: 1 });
+  const scan = (tok, xff) => a.inject({ url: `/api/holder-intel?token=${tok}&chain=base&stage=full`, headers: { 'x-forwarded-for': xff } });
+  assert.notEqual((await scan(H('6'), '1.1.1.1')).statusCode, 429);
+  assert.notEqual((await scan(H('7'), '2.2.2.2')).statusCode, 429, 'another visitor is not throttled by the first');
+  assert.equal((await scan(H('8'), '9.9.9.9, 1.1.1.1')).statusCode, 429, 'a forged left-most address does not reset the limit');
+});

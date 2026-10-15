@@ -22,10 +22,21 @@ export interface AppOptions {
   scansPerMinute?: number;
   /** Fetch used for token logos (tests pass a stub). */
   fetchImage?: typeof fetch;
+  /**
+   * Proxy hops in front of the server whose X-Forwarded-For to trust (Railway: 1),
+   * so per-IP limits see the visitor and not the proxy. Never `true`: that
+   * would let a visitor name their own IP.
+   */
+  trustProxyHops?: number;
 }
 
 export function buildApp(opts: AppOptions): FastifyInstance {
-  const app = Fastify({ logger: opts.logger ?? false });
+  const hops = opts.trustProxyHops ?? 0;
+  const app = Fastify({
+    logger: opts.logger ?? false,
+    // Trust the nearest `hops` addresses (i = 0 is the socket peer): the same as a hop count.
+    ...(hops > 0 ? { trustProxy: (_addr: string, i: number) => i < hops } : {}),
+  });
   const service = new Service(opts.client, opts.service);
 
   app.get('/health', async () => ({ ok: true, version: opts.version }));

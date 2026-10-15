@@ -22,6 +22,7 @@ const app = buildApp({
   logger: true,
   webDir: fileURLToPath(new URL('../dist/web', import.meta.url)),
   holderIntel: Boolean(config.apiKey),
+  trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 1) || 0,
 });
 
 app.listen({ port: config.port, host: '0.0.0.0' }).catch((err) => {

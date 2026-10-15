@@ -29,7 +29,7 @@ export interface IntelOptions {
 }
 
 const STATUS: Record<string, number> = {
-  invalid_token: 400, unsupported_chain: 400, token_not_found: 404, rate_limited: 429, not_configured: 503, internal: 502, feature_disabled: 404,
+  invalid_token: 400, unsupported_chain: 400, token_not_found: 404, rate_limited: 429, not_configured: 503, internal: 502, feature_disabled: 200,
 };
 
 export function registerIntel(app: FastifyInstance, service: Service, opts: IntelOptions): void {

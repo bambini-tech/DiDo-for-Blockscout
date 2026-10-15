@@ -5,19 +5,33 @@ Instructions for any AI/agent session working on this repo.
 ## What this is
 
 A **public** hackathon entry (Blockscout PRO API Buildathon, Oct 8 - Nov 3
-2026): a token's holder map and wallet clusters, built entirely on the
-Blockscout PRO API. It is a stand-alone project, separate from DigitalDon's
-private monorepo and from the DiDo that ships there. Nothing here is read by
+2026): DiDo's discovery edition -- the holder map, clusters, wallet journey
+and chart -- with every holder, wallet and token fact read from the
+Blockscout PRO API by this repo's own server. It is a stand-alone project,
+separate from DigitalDon's private monorepo and from the DiDo that ships
+there (which has its own backend and trading). Nothing here is read by
 DigitalDon and nothing flows back automatically.
+
+Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page,
+`web/vendor/` DigitalDon's engine and holder map, `web/build.mjs` the bundle.
 
 ## Rules
 
 - **Public repo.** Never commit an API key, a `.env`, internal hostnames, or
   anything from DigitalDon's private code that is not meant to be public.
   Write the code here fresh; do not paste the private bot's source.
-- **Blockscout is the only data source.** Judging weights the Blockscout
-  integration at 30%, and the pitch is "every number comes from Blockscout".
-  Do not add another data provider.
+- **Blockscout is the only server-side data source.** Judging weights the
+  Blockscout integration at 30%, and the pitch is "every holder, wallet and
+  token fact comes from Blockscout". The one exception is the price chart,
+  read in the viewer's browser from DexScreener/GeckoTerminal. Do not add
+  another provider to the server.
+- **`web/vendor/` is never edited here.** It is a byte-for-byte snapshot
+  (`web/vendor/SOURCE.md`); the build and `test/web.test.mjs` check it.
+  Adapt DiDo in `web/src/`, and keep its chain list and explorers in sync
+  with `src/chains.ts` (the test fails on drift).
+- **The page has nothing inline** (no inline script, style or `style=`): it
+  ships under `script-src 'self'` / `style-src 'self'`.
+- **No trading, no accounts.** This edition is discovery only.
 - **Never log the API key.** It travels as a query parameter, so never log or
   return a request URL as-is.
 - **"Absent" is not "error".** Keep the client's `ok / absent / error`
@@ -26,5 +40,8 @@ DigitalDon and nothing flows back automatically.
 - **Respect the rate gate.** Every request goes through `BlockscoutClient`;
   never call `fetch` on Blockscout directly.
 - **Brand is monochrome** (ink on paper, emphasis by opacity), as in
-  DigitalDon. The cluster tints are the only colour.
+  DigitalDon. The only colour: the holder map's role tints, and the token's
+  own logo colours in the frosted background (never on text or data).
 - Run `npm test` before every push. Bump `VERSION` and `package.json` together.
+- The key: `.env` locally (gitignored), the host's environment variables in
+  production (Railway: the service's Variables). Never in a file in the repo.
