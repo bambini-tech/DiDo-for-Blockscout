@@ -18,11 +18,12 @@ export class TtlCache<V> {
     return hit.value;
   }
 
-  set(key: string, value: V): void {
+  /** `ttlMs` overrides the cache's own lifetime for this entry. */
+  set(key: string, value: V, ttlMs = this.ttlMs): void {
     if (this.map.size >= this.max) {
       const oldest = this.map.keys().next().value;
       if (oldest !== undefined) this.map.delete(oldest);
     }
-    this.map.set(key, { value, expires: this.now() + this.ttlMs });
+    this.map.set(key, { value, expires: this.now() + ttlMs });
   }
 }

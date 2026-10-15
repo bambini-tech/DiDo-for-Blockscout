@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { planNamed, type Plan } from './blockscout/credits.js';
 
 export interface Config {
   apiKey: string;
@@ -7,6 +8,8 @@ export interface Config {
   version: string;
   /** Blockscout PRO API base; override only to test against a stand-in. */
   baseUrl: string;
+  /** The Blockscout plan the key is on (BLOCKSCOUT_PLAN: builder, the default, or free). */
+  plan: Plan;
 }
 
 function readVersion(): string {
@@ -18,11 +21,19 @@ function readVersion(): string {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const rps = Number(env.BLOCKSCOUT_RPS ?? 4.5);
+  const base = planNamed(env.BLOCKSCOUT_PLAN);
+  // Any knob set on its own wins over the plan's default.
+  const num = (v: string | undefined, d: number) => (v !== undefined && Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : d);
+  const plan: Plan = {
+    ...base,
+    rps: num(env.BLOCKSCOUT_RPS, base.rps) || base.rps,
+    dailyBrake: num(env.BLOCKSCOUT_DAILY_CREDIT_BRAKE, base.dailyBrake),
+  };
   return {
     apiKey: (env.BLOCKSCOUT_API_KEY ?? '').trim(),
     port: Number(env.PORT ?? 3000),
-    rps: Number.isFinite(rps) && rps > 0 ? rps : 4.5,
+    rps: plan.rps,
+    plan,
     version: readVersion(),
     baseUrl: (env.BLOCKSCOUT_BASE_URL ?? 'https://api.blockscout.com').trim() || 'https://api.blockscout.com',
   };

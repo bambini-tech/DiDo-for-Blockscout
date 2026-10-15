@@ -44,7 +44,11 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   });
   const service = new Service(opts.client, opts.service);
 
-  app.get('/health', async () => ({ ok: true, version: opts.version }));
+  app.get('/health', async () => ({
+    ok: true,
+    version: opts.version,
+    ...(opts.client.ledger ? { blockscout: { ...opts.client.ledger.stats(), requests: opts.client.calls } } : {}),
+  }));
   if (opts.webDir) registerWeb(app, { dir: opts.webDir, version: opts.version, holderIntel: opts.holderIntel ?? true });
   const mapped = new MappedLog();
   let board: BoardKeeper | undefined;

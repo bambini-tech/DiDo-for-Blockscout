@@ -124,10 +124,10 @@ test('deployer holding the token links to the holders it funded', () => {
 });
 
 test('named contracts and sinks never link on native coin', () => {
-  const many = Array.from({ length: 8 }, (_, i) => inflow('0x' + '9'.repeat(39) + i)); // 8 distinct outside senders
+  const many = Array.from({ length: 15 }, (_, i) => inflow('0x' + '9'.repeat(38) + String(i).padStart(2, '0'))); // 15 distinct outside senders
   const r = run([holder(H1, 30, { isContract: true, name: 'Uniswap V3: Pool' }), holder(H2, 10), holder(H3, 5), holder(H4, 2)], [
     trace(H1, [inflow(S)]),
-    trace(H2, [...many, inflow(S)]), // 9 distinct senders: a sink
+    trace(H2, [...many, inflow(S)]), // 16 distinct senders: a sink
     trace(H3, [inflow(S)]),
     trace(H4, [inflow(X)]),
   ], { txCounts: { [S]: 10 } });

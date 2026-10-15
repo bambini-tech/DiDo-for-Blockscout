@@ -78,11 +78,13 @@ browser ──── DiDo page (map, chart, wallet pane)
             └── Blockscout PRO API (one key, one rate gate, every chain)
 ```
 
-A first look at a token costs about 60–120 Blockscout requests, roughly
-15–30 seconds behind the rate gate; the map shows the holders within seconds
-and the clusters join it when the walk is done, with a progress line in
-between. Funding traces are cached per wallet and shared across tokens, and
-a finished map is cached for 10 minutes.
+A first look at a token takes about 130–230 Blockscout requests (see
+[Plan and credits](#plan-and-credits)), 10–17 seconds on the builder plan;
+the map shows the holders within seconds and the clusters join it when the
+walk is done, with a progress line in between. Funding traces are cached per
+wallet and shared across tokens (a day for a wallet whose oldest history is
+fully read, since it can no longer change), and a finished map is cached for
+10 minutes.
 
 ## Chains
 
@@ -125,6 +127,38 @@ Immutable zkEVM, IOTA EVM, Zilliqa, Filecoin EVM, Plume, Shape, Arbitrum Nova
 and a few younger chains. The remaining PRO API mainnets have no
 GeckoTerminal market yet, so there would be no candles to chart.
 
+## Plan and credits
+
+DiDo is built for Blockscout's **builder plan** (15 requests a second, 100M
+credits a month) and runs on the free plan too (`BLOCKSCOUT_PLAN=free`: 5 a
+second, 100k credits a day, 50 holders traced instead of 100).
+
+- **One rate gate** for the whole process at 90% of the plan's rate (13.5/s),
+  with 12 requests in flight so the gate, not network latency, sets the pace.
+- **Every route DiDo uses is a standard one (20 credits).** Prices come from
+  Blockscout's published list (`api.blockscout.com/api/json/config`), read at
+  start; each request is charged once, retries included.
+- **Depth is free, requests are not.** Blockscout bills per request, not per
+  row, so each funding trace reads a wallet's oldest 100 transactions in the
+  same one request that 20 would cost.
+- **Nothing is read twice that cannot have changed:** traces, deployers,
+  launches and shared-sender counts are cached and shared across tokens.
+- **A runaway brake:** once a UTC day has spent twice an even day's share of
+  the month (~6.4M credits), new requests are refused until midnight and the
+  page says the data is unavailable -- never that a token has no holders.
+  `/health` shows today's credits.
+
+| What | Requests | Credits |
+|---|---|---|
+| Holders (the map's first answer) | 3 | 60 |
+| Full map, first look (100 holders traced, launch, deployer, shared funders) | ~130–230 | ~2,600–4,600 |
+| The same token again within 10 minutes | 0 | 0 |
+| Wallet scan (17 chains probed, +3 per chain it is on) | ~20–30 | ~400–600 |
+| Entry board round (holder checks for the picks) | ~10–40 | ~200–800 |
+
+On 100M credits that is roughly 25,000 first-look maps or 170,000 wallet
+scans a month.
+
 ## The entry board
 
 Every 4 hours the server reads the tokens that are moving on all 17
@@ -150,8 +184,8 @@ round until the next one lands.
 
 ## How wallets get linked
 
-For the top 50 holders that are people (pools, burn addresses and named
-contracts are set aside), DiDo reads each wallet's **oldest** 20 transactions:
+For the top 100 holders that are people (pools, burn addresses and named
+contracts are set aside), DiDo reads each wallet's **oldest** 100 transactions:
 where its first coin came from, and every wallet it exchanged native coin with
 early on. Then it links holders, strongest evidence first:
 
@@ -174,7 +208,7 @@ The rules that keep the map honest:
 - **Round amounts aren't a fingerprint.** 0.01 ETH is what thousands of
   strangers withdraw; 0.0137264 ETH is not.
 - **Some holders never link on coin flows.** Named contracts and *sinks*
-  (wallets paid by 8+ different senders: deposit addresses, treasuries) would
+  (wallets paid by 15+ different senders: deposit addresses, treasuries) would
   wire unrelated people together.
 - A wallet's first-transaction counterparty is shown when nothing else funded
   it, but never used as a link. Clusters held together only by timing or

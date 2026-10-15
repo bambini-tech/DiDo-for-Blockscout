@@ -3,6 +3,7 @@ import { loadConfig } from './config.js';
 import { BlockscoutClient } from './blockscout/client.js';
 import { buildApp } from './server.js';
 import { RULES } from './board/read.js';
+import { CreditLedger } from './blockscout/credits.js';
 
 // Local runs read .env; on Railway the variables come from the service settings.
 try {
@@ -18,13 +19,17 @@ if (!config.apiKey) {
   console.warn('BLOCKSCOUT_API_KEY is not set: the page and chart run, the holder map and wallet scans do not. See .env.example.');
 }
 
-const client = new BlockscoutClient({ apiKey: config.apiKey, rps: config.rps, baseUrl: config.baseUrl });
+const ledger = new CreditLedger(config.plan);
+// Blockscout's own price list (public, no key); the built-in copy stands in if it cannot be read.
+void ledger.loadPricing();
+const client = new BlockscoutClient({ apiKey: config.apiKey, rps: config.rps, baseUrl: config.baseUrl, ledger });
 const app = buildApp({
   client,
   version: config.version,
   logger: true,
   webDir: fileURLToPath(new URL('../dist/web', import.meta.url)),
   holderIntel: Boolean(config.apiKey),
+  service: { traceLimit: config.plan.traceLimit, concurrency: config.plan.concurrency },
   trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 1) || 0,
   board: process.env.BOARD_ENABLED !== '0',
 });

@@ -48,6 +48,12 @@ Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page,
   holders" or "no clusters".
 - **Respect the rate gate.** Every request goes through `BlockscoutClient`;
   never call `fetch` on Blockscout directly.
+- **The key is on the builder plan** (15 req/s, 100M credits a month; plan
+  settings in `src/blockscout/credits.ts`, `BLOCKSCOUT_PLAN=free` for the
+  free tier). Blockscout bills per request, not per row: read deep pages in
+  one request rather than many small ones, cache what cannot change, and
+  stay on 20-credit routes unless a pricier one replaces several requests.
+  Every request is charged on the `CreditLedger`; `/health` shows the day.
 - **Brand is monochrome** (ink on paper, emphasis by opacity), as in
   DigitalDon. The only colour: the holder map's role tints, and the token's
   own logo colours in the frosted background (never on text or data).

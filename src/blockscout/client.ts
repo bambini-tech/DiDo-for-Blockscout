@@ -20,6 +20,8 @@
  * into an error message as-is.
  */
 
+import type { CreditLedger } from './credits.js';
+
 export type Status = 'ok' | 'absent' | 'error';
 
 export interface Result<T> {
@@ -36,6 +38,8 @@ export interface ClientOptions {
   fetch?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  /** Credit accounting and the daily brake. */
+  ledger?: CreditLedger;
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -52,6 +56,7 @@ export class BlockscoutClient {
   private readonly fetchFn: typeof fetch;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
+  readonly ledger: CreditLedger | undefined;
   private nextSlot = 0;
 
   constructor(opts: ClientOptions) {
@@ -63,6 +68,7 @@ export class BlockscoutClient {
     this.fetchFn = opts.fetch ?? fetch;
     this.sleep = opts.sleep ?? defaultSleep;
     this.now = opts.now ?? Date.now;
+    this.ledger = opts.ledger;
   }
 
   /** GET /{chainId}/api/v2/{path}. */
@@ -112,6 +118,11 @@ export class BlockscoutClient {
   }
 
   private async request(url: URL, context: string): Promise<Response | null> {
+    // One charge per logical request; a refused one is an error, never "nothing here".
+    if (this.ledger && !this.ledger.charge(url.pathname)) {
+      log(`${context}: not sent -- today's credit brake is reached`);
+      return null;
+    }
     url.searchParams.set('apikey', this.apiKey);
     for (let attempt = 1; attempt <= this.attempts; attempt++) {
       await this.gate();
