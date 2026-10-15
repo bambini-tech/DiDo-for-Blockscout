@@ -320,7 +320,7 @@ test/                    node:test suites
 - [x] Live deployment and demo
 
 **Sprint 2 (Oct 25–31)**: token security from the verified contract
-(mint, owner, proxy), cost basis in the wallet pane, more chains, and
+(mint, owner, proxy), more chains, and
 whatever the Sprint 1 feedback asks for.
 
 Not financial advice.
