@@ -1,9 +1,10 @@
 /**
  * Blockscout PRO API client.
  *
- * Two route families, one key for every chain:
+ * Three route families, one key for every chain:
  *   REST v2           https://api.blockscout.com/{chainId}/api/v2/{path}
  *   Etherscan-compat  https://api.blockscout.com/v2/api?chain_id=...&module=...
+ *   Multichain        https://api.blockscout.com/multichain/api/v1/{path} (across chains)
  *
  * Three things every caller relies on:
  *
@@ -76,6 +77,27 @@ export class BlockscoutClient {
     const url = new URL(`${this.baseUrl}/${chainId}/api/v2/${path.replace(/^\/+/, '')}`);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
     const res = await this.request(url, `REST ${chainId}/${path}`);
+    if (!res) return { data: null, status: 'error' };
+    if (res.status === 404) return { data: null, status: 'absent' };
+    if (res.status !== 200) return { data: null, status: 'error' };
+    try {
+      return { data: (await res.json()) as T, status: 'ok' };
+    } catch {
+      return { data: null, status: 'error' };
+    }
+  }
+
+  /**
+   * GET /multichain/api/v1/{path}: Blockscout's multichain aggregator, one
+   * answer across every chain it indexes. An array value repeats the
+   * parameter (chain_id=1&chain_id=8453).
+   */
+  async multichain<T>(path: string, params: Record<string, string | number | Array<string | number>> = {}): Promise<Result<T>> {
+    const url = new URL(`${this.baseUrl}/multichain/api/v1/${path.replace(/^\/+/, '')}`);
+    for (const [k, v] of Object.entries(params)) {
+      for (const one of Array.isArray(v) ? v : [v]) url.searchParams.append(k, String(one));
+    }
+    const res = await this.request(url, `Multichain ${path}`);
     if (!res) return { data: null, status: 'error' };
     if (res.status === 404) return { data: null, status: 'absent' };
     if (res.status !== 200) return { data: null, status: 'error' };

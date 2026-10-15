@@ -59,6 +59,7 @@ gate for the whole process, retries on 429/5xx, and an honest
 | Launch: bundles and snipers | `GET /v2/api?module=logs&action=getLogs` (Transfer events from the creation block) |
 | Who funded each holder, and every wallet it traded coin with | `GET /v2/api?module=account&action=txlist` (and `txlistinternal` when no plain transfer funded it), oldest first |
 | Whether a shared funder is infrastructure | `GET /{chainId}/api/v2/addresses/{funder}/counters` |
+| Which chains a wallet is on, in one request | `GET /multichain/api/v1/addresses?q={wallet}&chain_id=...` (the multichain aggregator; its indexed chains from `/multichain/api/v1/chains`) |
 | A wallet's native balance, ENS, name and tags | `GET /{chainId}/api/v2/addresses/{wallet}` |
 | A wallet's tokens and their USD value | `GET /{chainId}/api/v2/addresses/{wallet}/token-balances` |
 | A wallet's transaction count | `GET /{chainId}/api/v2/addresses/{wallet}/counters` |
@@ -153,11 +154,20 @@ second, 100k credits a day, 50 holders traced instead of 100).
 | Holders (the map's first answer) | 3 | 60 |
 | Full map, first look (100 holders traced, launch, deployer, shared funders) | ~130–230 | ~2,600–4,600 |
 | The same token again within 10 minutes | 0 | 0 |
-| Wallet scan (17 chains probed, +3 per chain it is on) | ~20–30 | ~400–600 |
+| Wallet scan (one multichain lookup, then 4 per chain it is on) | ~5–15 | ~100–300 |
+| Wallet scan without the aggregator (`WALLET_DISCOVERY=probe`, or if it is down) | ~20–30 | ~400–600 |
 | Entry board round (holder checks for the picks) | ~10–40 | ~200–800 |
 
-On 100M credits that is roughly 25,000 first-look maps or 170,000 wallet
+On 100M credits that is roughly 25,000 first-look maps or 400,000 wallet
 scans a month.
+
+**The wallet scan asks Blockscout's multichain aggregator first.** One
+request says which chains the wallet exists on; only those are read. The
+aggregator refuses a request naming a chain it does not index, so it is
+asked only about the chains it lists (read once a day), and any of DiDo's
+chains it does not index are still probed directly. If the aggregator cannot
+be read, every chain is probed: a wallet is never thinner for it. The answer
+says which way it went (`discovery`).
 
 ## The entry board
 

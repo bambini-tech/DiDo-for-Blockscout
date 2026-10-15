@@ -8,6 +8,10 @@ export class TtlCache<V> {
     private readonly now: () => number = Date.now,
   ) {}
 
+  clear(): void {
+    this.map.clear();
+  }
+
   get(key: string): V | undefined {
     const hit = this.map.get(key);
     if (!hit) return undefined;

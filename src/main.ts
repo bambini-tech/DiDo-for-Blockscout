@@ -32,6 +32,7 @@ const app = buildApp({
   service: { traceLimit: config.plan.traceLimit, concurrency: config.plan.concurrency },
   trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 1) || 0,
   board: process.env.BOARD_ENABLED !== '0',
+  walletDiscovery: process.env.WALLET_DISCOVERY === 'probe' ? 'probe' : 'multichain',
 });
 
 app.listen({ port: config.port, host: '0.0.0.0' }).catch((err) => {

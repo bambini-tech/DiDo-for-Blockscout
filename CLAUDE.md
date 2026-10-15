@@ -54,6 +54,10 @@ Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page,
   one request rather than many small ones, cache what cannot change, and
   stay on 20-credit routes unless a pricier one replaces several requests.
   Every request is charged on the `CreditLedger`; `/health` shows the day.
+- **Wallet scans find chains through the multichain aggregator first**
+  (`src/blockscout/multichain.ts`): one lookup, then only the chains the
+  wallet is on. Chains it does not index are still probed, and any failure
+  falls back to probing every chain -- never a thinner wallet.
 - **Brand is monochrome** (ink on paper, emphasis by opacity), as in
   DigitalDon. The only colour: the holder map's role tints, and the token's
   own logo colours in the frosted background (never on text or data).

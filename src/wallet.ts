@@ -8,19 +8,32 @@
  *   - a chain that could not be read is listed as failed and missing from the
  *     total, never shown as empty
  *
+ * Where to look comes first, in one request: Blockscout's multichain
+ * aggregator says which chains the wallet exists on, and only those are read
+ * (balance, tokens, NFTs). Chains the aggregator does not index are probed
+ * directly, as before; if the aggregator cannot be read, every chain is
+ * probed. Either way no chain the wallet is on is skipped for want of an
+ * answer. `discovery` in the result says which way it went.
+ *
  * Cost basis (PnL) is not computed in this edition: `pnl` is null and the
  * pane says so.
  */
 import { CHAINS, type Chain } from './chains.js';
 import type { BlockscoutClient } from './blockscout/client.js';
 import { readWalletChain, type WalletChainRead } from './blockscout/wallet.js';
+import { aggregatorChains, chainsWithAddress } from './blockscout/multichain.js';
 
 const DUST_USD = 1;
 const MAX_ROWS = 50;
 
-export async function scanWallet(client: BlockscoutClient, wallet: string, chains: readonly Chain[] = CHAINS) {
+export type Discovery = 'multichain' | 'probe';
+
+export async function scanWallet(client: BlockscoutClient, wallet: string, chains: readonly Chain[] = CHAINS, discovery: Discovery = 'multichain') {
   const address = wallet.toLowerCase();
-  const reads = await Promise.all(chains.map(async (c) => [c, await readWalletChain(client, c.chainId, address)] as const));
+  const plan = await planChains(client, address, chains, discovery);
+  const skipped: WalletChainRead = { status: 'absent', address: null, txCount: null, tokens: [], tokensOk: true, nfts: [], nftsMore: false };
+  const reads = await Promise.all(chains.map(async (c) =>
+    [c, plan.read.has(c.chainId) ? await readWalletChain(client, c.chainId, address) : skipped] as const));
   // Chains sharing a gas coin share its price: one ETH price serves an ETH chain whose row lacks it.
   const nativeUsd = new Map<string, number>();
   for (const [c, r] of reads) if (r.address?.nativeUsd && !nativeUsd.has(c.native)) nativeUsd.set(c.native, r.address.nativeUsd);
@@ -109,7 +122,22 @@ export async function scanWallet(client: BlockscoutClient, wallet: string, chain
     error: null,
     pnl_pending: false,
     source: 'blockscout',
+    discovery: plan.info,
   };
+}
+
+/** Which chains to read: the ones the aggregator places the wallet on, plus every chain it does not index. */
+async function planChains(client: BlockscoutClient, address: string, chains: readonly Chain[], discovery: Discovery) {
+  const all = new Set(chains.map((c) => c.chainId));
+  if (discovery === 'probe') return { read: all, info: { via: 'probe' as const, probed: all.size } };
+  const indexed = await aggregatorChains(client);
+  if (!indexed) return { read: all, info: { via: 'probe' as const, probed: all.size, reason: 'aggregator chain list unavailable' } };
+  const covered = chains.filter((c) => indexed.has(c.chainId)).map((c) => c.chainId);
+  const present = await chainsWithAddress(client, address, covered);
+  if (!present) return { read: all, info: { via: 'probe' as const, probed: all.size, reason: 'aggregator lookup failed' } };
+  const uncovered = chains.filter((c) => !indexed.has(c.chainId)).map((c) => c.chainId);
+  const read = new Set([...present, ...uncovered].filter((id) => all.has(id)));
+  return { read, info: { via: 'multichain' as const, found_on: present.size, probed: uncovered.length, skipped: covered.length - present.size } };
 }
 
 interface Row {
