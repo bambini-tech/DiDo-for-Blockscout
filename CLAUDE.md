@@ -24,7 +24,8 @@ Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page,
   Judging weights the Blockscout integration at 30%. Market data (which
   tokens move, prices, candles) is the one exception, from DexScreener and
   GeckoTerminal: in the browser for the chart, on the server only for the
-  entry board (`src/market/`, paced, 429 backoff). Never read holders,
+  entry board and for pricing wallet tokens Blockscout has no rate for
+  (`src/market/`, paced, 429 backoff). Never read holders,
   wallets or token info anywhere else, and add no other provider.
 - **`web/vendor/` is never edited here.** It is a byte-for-byte snapshot
   (`web/vendor/SOURCE.md`); the build and `test/web.test.mjs` check it.
@@ -54,6 +55,10 @@ Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page,
   one request rather than many small ones, cache what cannot change, and
   stay on 20-credit routes unless a pricier one replaces several requests.
   Every request is charged on the `CreditLedger`; `/health` shows the day.
+- **The wallet scan matches DigitalDon's** (the private DiDo's pane reads the
+  same shape): Blockscout rate then DexScreener's deepest base-side pool,
+  unpriced tokens counted not shown, 15 rows, dust in the total, cost basis
+  from the wallet's own history (`src/wallet-pnl.ts`), NFT adverts hidden.
 - **Wallet scans find chains through the multichain aggregator first**
   (`src/blockscout/multichain.ts`): one lookup, then only the chains the
   wallet is on. Chains it does not index are still probed, and any failure

@@ -1,5 +1,5 @@
 {
- "_note": "Every Blockscout PRO API mainnet that DexScreener and GeckoTerminal also cover, checked against live data (see README, Chains). key = DexScreener chainId, gt = GeckoTerminal network, chainId = the Blockscout PRO API chain id.",
+ "_note": "Every Blockscout PRO API mainnet that DexScreener and GeckoTerminal also cover, checked against live data (see README, Chains). key = DexScreener chainId, gt = GeckoTerminal network, chainId = the Blockscout PRO API chain id. wrapped = the gas coin's ERC-20 (WETH, WPOL, CELO itself, ...), checked on DexScreener under the same key; null where the gas coin is a stablecoin (Arc: USDC).",
  "chains": [
   {
    "key": "ethereum",
@@ -9,7 +9,8 @@
    "code": "et",
    "native": "ETH",
    "gt": "eth",
-   "explorer": "https://eth.blockscout.com"
+   "explorer": "https://eth.blockscout.com",
+   "wrapped": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
   },
   {
    "key": "arbitrum",
@@ -19,7 +20,8 @@
    "code": "ar",
    "native": "ETH",
    "gt": "arbitrum",
-   "explorer": "https://arbitrum.blockscout.com"
+   "explorer": "https://arbitrum.blockscout.com",
+   "wrapped": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
   },
   {
    "key": "arc",
@@ -29,7 +31,8 @@
    "code": "ac",
    "native": "USDC",
    "gt": "arc",
-   "explorer": "https://explorer.arc.io"
+   "explorer": "https://explorer.arc.io",
+   "wrapped": null
   },
   {
    "key": "base",
@@ -39,7 +42,8 @@
    "code": "ba",
    "native": "ETH",
    "gt": "base",
-   "explorer": "https://base.blockscout.com"
+   "explorer": "https://base.blockscout.com",
+   "wrapped": "0x4200000000000000000000000000000000000006"
   },
   {
    "key": "celo",
@@ -49,7 +53,8 @@
    "code": "ce",
    "native": "CELO",
    "gt": "celo",
-   "explorer": "https://celo.blockscout.com"
+   "explorer": "https://celo.blockscout.com",
+   "wrapped": "0x471ece3750da237f93b8e339c536989b8978a438"
   },
   {
    "key": "flowevm",
@@ -59,7 +64,8 @@
    "code": "fl",
    "native": "FLOW",
    "gt": "flow-evm",
-   "explorer": "https://evm.flow.com"
+   "explorer": "https://evm.flow.com",
+   "wrapped": "0xd3bf53dac106a0290b0483ecbc89d40fcc961f3e"
   },
   {
    "key": "fuse",
@@ -69,7 +75,8 @@
    "code": "fu",
    "native": "FUSE",
    "gt": "fuse",
-   "explorer": "https://explorer.fuse.io"
+   "explorer": "https://explorer.fuse.io",
+   "wrapped": "0x0be9e53fd7edac9f859882afdda116645287c629"
   },
   {
    "key": "ink",
@@ -79,7 +86,8 @@
    "code": "in",
    "native": "ETH",
    "gt": "ink",
-   "explorer": "https://explorer.inkonchain.com"
+   "explorer": "https://explorer.inkonchain.com",
+   "wrapped": "0x4200000000000000000000000000000000000006"
   },
   {
    "key": "megaeth",
@@ -89,7 +97,8 @@
    "code": "me",
    "native": "ETH",
    "gt": "megaeth",
-   "explorer": "https://megaeth.blockscout.com"
+   "explorer": "https://megaeth.blockscout.com",
+   "wrapped": "0x4200000000000000000000000000000000000006"
   },
   {
    "key": "optimism",
@@ -99,7 +108,8 @@
    "code": "op",
    "native": "ETH",
    "gt": "optimism",
-   "explorer": "https://explorer.optimism.io"
+   "explorer": "https://explorer.optimism.io",
+   "wrapped": "0x4200000000000000000000000000000000000006"
   },
   {
    "key": "polygon",
@@ -109,7 +119,8 @@
    "code": "po",
    "native": "POL",
    "gt": "polygon_pos",
-   "explorer": "https://polygon.blockscout.com"
+   "explorer": "https://polygon.blockscout.com",
+   "wrapped": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270"
   },
   {
    "key": "robinhood",
@@ -119,7 +130,8 @@
    "code": "ro",
    "native": "ETH",
    "gt": "robinhood",
-   "explorer": "https://robinhoodchain.blockscout.com"
+   "explorer": "https://robinhoodchain.blockscout.com",
+   "wrapped": "0x0bd7d308f8e1639fab988df18a8011f41eacad73"
   },
   {
    "key": "scroll",
@@ -129,7 +141,8 @@
    "code": "sc",
    "native": "ETH",
    "gt": "scroll",
-   "explorer": "https://scrollscan.com"
+   "explorer": "https://scrollscan.com",
+   "wrapped": "0x5300000000000000000000000000000000000004"
   },
   {
    "key": "soneium",
@@ -139,7 +152,8 @@
    "code": "sn",
    "native": "ETH",
    "gt": "soneium",
-   "explorer": "https://soneium.blockscout.com"
+   "explorer": "https://soneium.blockscout.com",
+   "wrapped": "0x4200000000000000000000000000000000000006"
   },
   {
    "key": "unichain",
@@ -149,7 +163,8 @@
    "code": "un",
    "native": "ETH",
    "gt": "unichain",
-   "explorer": "https://unichain.blockscout.com"
+   "explorer": "https://unichain.blockscout.com",
+   "wrapped": "0x4200000000000000000000000000000000000006"
   },
   {
    "key": "worldchain",
@@ -159,7 +174,8 @@
    "code": "wc",
    "native": "ETH",
    "gt": "world-chain",
-   "explorer": "https://worldchain-mainnet.explorer.alchemy.com"
+   "explorer": "https://worldchain-mainnet.explorer.alchemy.com",
+   "wrapped": "0x4200000000000000000000000000000000000006"
   },
   {
    "key": "zksync",
@@ -169,7 +185,8 @@
    "code": "zk",
    "native": "ETH",
    "gt": "zksync",
-   "explorer": "https://zksync.blockscout.com"
+   "explorer": "https://zksync.blockscout.com",
+   "wrapped": "0x5aea5775959fbc2557cc8789bc1bf90a239d9a91"
   }
  ]
 }

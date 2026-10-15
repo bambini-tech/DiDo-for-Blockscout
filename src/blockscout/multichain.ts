@@ -17,14 +17,21 @@ const indexed = new TtlCache<Set<number>>(DAY, 4);
 /** A failed read is remembered briefly, so each wallet scan does not pay for the same failure. */
 const RETRY_AFTER = 10 * 60_000;
 
+/** Why the last chain-list read failed (an HTTP status or "no chains"), for the scan's `discovery`. */
+let lastError: string | null = null;
+export function aggregatorError(): string | null {
+  return lastError;
+}
+
 /** Chain ids the aggregator indexes; null when it could not be read. */
 export async function aggregatorChains(client: BlockscoutClient): Promise<Set<number> | null> {
   const hit = indexed.get(client.baseUrl);
   if (hit) return hit.size ? hit : null;
-  const { data, status } = await client.multichain<{ items?: Array<{ id?: string | number }> }>('chains', { only_active: 'true' });
+  const { data, status, detail } = await client.multichain<{ items?: Array<{ id?: string | number }> }>('chains', { only_active: 'true' });
   const ids = status === 'ok' && Array.isArray(data?.items)
     ? new Set(data.items.map((c) => Number(c.id)).filter((n) => Number.isFinite(n)))
     : new Set<number>();
+  lastError = ids.size ? null : status === 'ok' ? 'no chains in the answer' : detail ?? status;
   indexed.set(client.baseUrl, ids, ids.size ? DAY : RETRY_AFTER);
   return ids.size ? ids : null;
 }
@@ -42,4 +49,5 @@ export async function chainsWithAddress(client: BlockscoutClient, address: strin
 /** For tests: forget the cached chain list. */
 export function resetAggregatorCache(): void {
   indexed.clear();
+  lastError = null;
 }

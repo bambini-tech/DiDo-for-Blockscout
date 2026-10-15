@@ -8,6 +8,7 @@ import { MappedLog } from './mapped.js';
 import { tintOf } from './tint.js';
 import { BoardKeeper } from './board/keeper.js';
 import { Market } from './market/market.js';
+import type { WalletPricer } from './wallet.js';
 import { loadEngine } from './board/engine.js';
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
@@ -25,6 +26,8 @@ export interface AppOptions {
   scansPerMinute?: number;
   /** Wallet scan chain discovery: 'multichain' (default) or 'probe'. */
   walletDiscovery?: 'multichain' | 'probe';
+  /** Prices the wallet scan's tokens that Blockscout has no rate for (DexScreener). Off unless given. */
+  walletPricer?: WalletPricer | null;
   /** Fetch used for token logos (tests pass a stub). */
   fetchImage?: typeof fetch;
   /**
@@ -67,6 +70,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     ...(board ? { board } : {}),
     client: opts.client,
     ...(opts.walletDiscovery ? { walletDiscovery: opts.walletDiscovery } : {}),
+    walletPricer: opts.walletPricer ?? null,
     configured: opts.holderIntel ?? true,
     ...(opts.scansPerMinute !== undefined ? { scansPerMinute: opts.scansPerMinute } : {}),
     onMapped: (chain, token, symbol, name, price) => mapped.record(chain, token, symbol, name, price),

@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
 import { BlockscoutClient } from './blockscout/client.js';
+import { Market, Pacer } from './market/market.js';
 import { buildApp } from './server.js';
 import { RULES } from './board/read.js';
 import { CreditLedger } from './blockscout/credits.js';
@@ -33,6 +34,8 @@ const app = buildApp({
   trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 1) || 0,
   board: process.env.BOARD_ENABLED !== '0',
   walletDiscovery: process.env.WALLET_DISCOVERY === 'probe' ? 'probe' : 'multichain',
+  // DexScreener allows ~300 token lookups a minute; the board's own reads use a separate pacer.
+  walletPricer: new Market({ dsPacer: new Pacer(250) }),
 });
 
 app.listen({ port: config.port, host: '0.0.0.0' }).catch((err) => {
