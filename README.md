@@ -299,7 +299,7 @@ test/                    node:test suites
 - [x] Launch signals (bundles, snipers) from Transfer logs
 - [x] The DiDo map, chart and wallet journey on this server
 - [x] DiDo's start page: the entry board, the garden, running hot
-- [ ] Live deployment and demo
+- [x] Live deployment and demo
 
 **Sprint 2 (Oct 25–31)**: token security from the verified contract
 (mint, owner, proxy), cost basis in the wallet pane, more chains, and
