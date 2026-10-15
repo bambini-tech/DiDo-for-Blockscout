@@ -16,6 +16,9 @@ export interface TokenMeta {
   holderCount: number | null;
   iconUrl: string | null;
   type: string | null;
+  /** Blockscout's USD price and circulating market cap, when it has a market for the token. */
+  priceUsd: number | null;
+  marketCapUsd: number | null;
 }
 
 export interface Holder {
@@ -42,6 +45,8 @@ interface RawToken {
   holders?: string | null;
   icon_url?: string | null;
   type?: string | null;
+  exchange_rate?: string | number | null;
+  circulating_market_cap?: string | number | null;
 }
 
 interface RawHolderPage {
@@ -77,6 +82,8 @@ export async function getTokenMeta(
       holderCount: hc,
       iconUrl: data.icon_url ?? null,
       type: data.type ?? null,
+      priceUsd: toPositive(data.exchange_rate),
+      marketCapUsd: toPositive(data.circulating_market_cap),
     },
   };
 }
@@ -126,6 +133,11 @@ function toInt(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+function toPositive(v: unknown): number | null {
+  const n = Number(v);
+  return v !== null && v !== undefined && v !== '' && Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function toBigIntString(v: unknown): string {

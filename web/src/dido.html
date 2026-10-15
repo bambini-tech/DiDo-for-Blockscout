@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-dido-version="{{VERSION}}" data-engine-version="{{ENGINE_VERSION}}">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>DiDo for Blockscout</title>
+<meta name="description" content="DiDo for Blockscout: who really holds a token. Holder map, wallet clusters and wallet journeys, built on the Blockscout PRO API." />
+<!-- No inline script or style anywhere in this document: the server sends a
+     CSP of script-src 'self' / style-src 'self'. Everything is class-driven. -->
+<link rel="stylesheet" href="dido.css?v={{VERSION}}" />
+</head>
+<body>
+<div class="dd has-home" id="app" data-state="idle">
+
+  <!-- The field: the holder map's own shell is rendered in here by the app
+       (holderSectionShellHtml from the shared block) and driven to the full
+       viewport through the block's host-driven fullscreen path. -->
+  <!-- The ground: the website's pool seen through frosted glass, in the
+       token's own colours (read from its logo). Behind the field, never on
+       data; plain light when the logo has no clear colour. -->
+  <div class="dd-tint" id="tint" aria-hidden="true"><i class="dd-tint__a"></i><i class="dd-tint__b"></i><canvas class="dd-tint__water" id="water"></canvas><div class="dd-tint__grain"></div></div>
+
+  <main class="dd-stage" id="stage" aria-label="the field"></main>
+
+  <!-- The band: a strip of frosted glass the length of the top, the water
+       running on under it; the chrome below sits on it. -->
+  <div class="dd-band" aria-hidden="true"></div>
+
+  <!-- Host chrome, floated over the field at the block's own 12px inset. -->
+  <div class="dd-tl" id="tl">
+    <a class="dd-mark" id="brand" href="/" aria-label="DiDo start">{{LOGO_SVG}}<span class="dd-mark__w">DiDo</span></a>
+    <div class="dd-trail" id="trail"></div>
+    <div class="dd-ticker mono" id="ticker" hidden aria-label="price and size"></div>
+  </div>
+  <div class="dd-sec" id="sec" hidden></div>
+  <div class="dd-tr" id="tr">
+    <button type="button" class="dd-chip" id="starChip" hidden aria-pressed="false">☆<span class="dd-chip__t"> watch</span></button>
+    <button type="button" class="dd-chip" id="wlChip" aria-expanded="false" aria-controls="wl" aria-label="watchlist">★ <span class="num" id="wlCount">0</span><i class="dd-chip__dot" id="wlGoDot" hidden></i></button>
+    <!-- No trading in this edition: it is the discovery half of DiDo. -->
+    <button type="button" class="dd-chip dd-chip--off" id="tradeChip" hidden disabled>trade</button>
+  </div>
+
+  <!-- Search: always in the centre of the band, a pill that widens under
+       the pointer or the keyboard (/) and narrows again when left. -->
+  <form class="dd-search" id="search" autocomplete="off" role="search">
+    <span class="dd-search__glyph" aria-hidden="true">⌕</span>
+    <input id="searchInput" type="text" inputmode="text" spellcheck="false" placeholder="token, contract or wallet" aria-label="Token ticker, contract address or wallet address" />
+    <span class="dd-search__k mono" aria-hidden="true">/</span>
+    <button type="submit" class="dd-search__go" id="searchGo">go</button>
+    <div class="dd-search__rows" id="searchRows" hidden></div>
+  </form>
+
+  <!-- The project's links: a small glass window under the trail's links chip. -->
+  <section class="dd-links" id="links" role="dialog" aria-label="the project's links" hidden></section>
+
+  <!-- The empty field: no token yet, or no map for this one. -->
+  <div class="dd-empty" id="empty" hidden>
+    <p class="dd-empty__t" id="emptyTitle">paste a token.</p>
+    <p class="dd-empty__s mono" id="emptySub">ethereum &middot; base &middot; arbitrum &middot; robinhood chain &middot; data by blockscout</p>
+  </div>
+
+  <!-- The welcome: what the field shows before a token, one screen with no
+       scrolling (0.26.0). The search sits in the band; under it a trending
+       strip, then the stage -- one fixed frame holding the garden (every
+       token the entry board read, the picks lit) or the board as cards,
+       switched by the one pill at its foot -- and under the stage the
+       viewer's own two strips: watching, opened lately. The frame is there
+       from the first paint, so nothing moves when the read arrives.
+       Rendered by HOME, drawn by GARDEN. -->
+  <section class="dd-home" id="home" aria-label="start">
+    <section class="dd-strip" id="homeTrend" aria-label="trending"></section>
+    <section class="dd-hs" id="homeStage" data-view="field" aria-label="the board">
+      <div class="dd-hs__field" id="homeField">
+        <canvas class="dd-garden" id="garden" hidden aria-hidden="true"></canvas>
+        <!-- the holder map's loader mark (hm-loader, from the shared block), filled
+             by HOME as the board's read comes in; its path is set from HM_MARK_D -->
+        <div class="dd-hs__wait" id="homeWait">
+          <div class="hm-loader__c">
+            <svg class="hm-loader__mark" viewBox="0 0 404.44 512" aria-hidden="true" focusable="false">
+              <defs><clipPath id="hsLoadClip"><rect id="hsLoadRect" x="-10" y="512" width="425" height="512"></rect></clipPath></defs>
+              <path class="hm-loader__ghost" fill-rule="evenodd" data-mark></path>
+              <path class="hm-loader__fill" fill-rule="evenodd" clip-path="url(#hsLoadClip)" data-mark></path>
+            </svg>
+            <div class="hm-loader__pct num" id="homeWaitPct"><b>0</b><span>%</span></div>
+            <div class="hm-loader__lbl mono" id="homeWaitT">reading the field · every token the board looked at</div>
+          </div>
+        </div>
+        <span class="dd-hs__zoom mono" id="homeZoom" data-zlabel hidden>the field</span>
+      </div>
+      <div class="dd-hs__cards" id="homeShelves"></div>
+      <div class="dd-hs__pop dd-hs__key mono" id="homeKey" hidden></div>
+      <div class="dd-hs__pop" id="homeFilters" hidden></div>
+      <div class="dd-hs__pill" id="homePill" role="toolbar" aria-label="the board">
+        <div class="dd-seg" role="group" aria-label="view">
+          <button type="button" data-view="field" aria-pressed="true">field</button>
+          <button type="button" data-view="cards" aria-pressed="false">cards</button>
+        </div>
+        <button type="button" class="dd-chip" id="homeFiltersBtn" data-filters aria-expanded="false" aria-controls="homeFilters">filters</button>
+        <button type="button" class="dd-chip" data-z="fit" aria-label="the whole field">○</button>
+        <button type="button" class="dd-chip" data-key aria-expanded="false" aria-controls="homeKey" aria-label="what the field shows">?</button>
+      </div>
+    </section>
+    <section class="dd-strip" id="homeWatch" aria-label="watching"></section>
+    <section class="dd-strip" id="homeRecent" aria-label="opened lately"></section>
+  </section>
+  <div class="dd-gpeek" id="gardenPeek" hidden aria-hidden="true"></div>
+
+  <!-- The watchlist: a glass panel under the band, top right. The same list
+       and the same verdict rule as the Web Analyzer's, kept in this browser. -->
+  <section class="dd-pane dd-wl" id="wl" hidden aria-label="watchlist">
+    <header class="dd-pane__hd">
+      <span class="dd-pane__t">watchlist</span>
+      <div class="dd-seg" id="wlHz" role="group" aria-label="plan">
+        <button type="button" data-hz="st" aria-pressed="true">short</button>
+        <button type="button" data-hz="lt" aria-pressed="false">long</button>
+      </div>
+      <button type="button" class="dd-chip" id="wlClose" aria-label="close the watchlist">✕</button>
+    </header>
+    <div class="dd-wl__pills" id="wlPills"></div>
+    <div class="dd-pane__body" id="wlBody"></div>
+    <footer class="dd-pane__ft mono">
+      <span id="wlNote">kept in this browser only</span>
+      <button type="button" class="dd-link" id="wlCopy">copy list link</button>
+    </footer>
+  </section>
+
+  <!-- A wallet, opened from the map or the search: what one address holds
+       on every chain we cover. Each holding opens as its own terminal. -->
+  <section class="dd-pane dd-wal" id="wal" hidden aria-label="wallet">
+    <header class="dd-pane__hd">
+      <span class="dd-pane__t" id="walTitle">wallet</span>
+      <button type="button" class="dd-chip" id="walCopy">copy</button>
+      <button type="button" class="dd-chip" id="walClose" aria-label="close the wallet">✕</button>
+    </header>
+    <div class="dd-pane__body" id="walBody"></div>
+  </section>
+
+  <!-- The wallet's full view: its holdings drawn over the whole field in the
+       holder map's own glass, one liquid body per chain. Opened from the
+       corner chip on the bubbles section in the wallet pane. -->
+  <section class="dd-wground" id="wground" hidden aria-label="the wallet">
+    <header class="dd-wground__hd">
+      <span class="dd-wground__cap mono" id="wgCap"></span>
+      <button type="button" class="dd-chip" id="wgFold"></button>
+    </header>
+    <div class="dd-wground__body" id="wgBody"></div>
+    <p class="dd-wground__read mono" id="wgRead" aria-live="polite"></p>
+  </section>
+  <!-- A holding's menu: the holder map's own bubble menu (.hm-ctx), for a
+       holding in the wallet's bubbles or its list. -->
+  <div class="hm-ctx dd-hctx" id="hctx" role="menu" hidden></div>
+  <!-- The trail: every place visited, at the foot of the field. -->
+  <nav class="dd-journey" id="journey" hidden aria-label="your trail"></nav>
+
+  <!-- The chart pane, docked bottom right. -->
+  <section class="dd-chart" id="chart" data-size="md" hidden aria-label="chart">
+    <header class="dd-chart__hd">
+      <span class="dd-tape mono" id="tape"></span>
+      <div class="dd-chart__ctl">
+        <div class="dd-tfs" id="units" role="group" aria-label="read the chart as">
+          <button type="button" class="dd-chip" data-unit="price">price</button>
+          <button type="button" class="dd-chip" data-unit="mcap">mcap</button>
+        </div>
+        <div class="dd-tfs" id="tfs" role="group" aria-label="timeframe">
+          <button type="button" class="dd-chip" data-tf="5m">5m</button>
+          <button type="button" class="dd-chip" data-tf="15m">15m</button>
+          <button type="button" class="dd-chip" data-tf="1h">1h</button>
+          <button type="button" class="dd-chip" data-tf="4h">4h</button>
+        </div>
+        <button type="button" class="dd-chip" id="emaChip" aria-pressed="false">ema</button>
+        <button type="button" class="dd-chip" id="zonesChip" aria-pressed="true">zones</button>
+        <button type="button" class="dd-chip" id="measureChip" aria-pressed="false">measure</button>
+        <button type="button" class="dd-chip" id="sizeChip" aria-label="chart size">⤡</button>
+        <button type="button" class="dd-chip" id="maxChip" aria-label="chart fullscreen">⤢</button>
+        <button type="button" class="dd-chip" id="foldChip" aria-label="fold the chart">▾</button>
+      </div>
+    </header>
+    <div class="dd-chart__plot" id="plot"></div>
+    <div class="dd-chart__grip" data-c="tl" aria-hidden="true"></div>
+    <div class="dd-chart__grip" data-c="tr" aria-hidden="true"></div>
+    <div class="dd-chart__grip" data-c="bl" aria-hidden="true"></div>
+    <div class="dd-chart__grip" data-c="br" aria-hidden="true"></div>
+    <div class="dd-chart__legend" id="legend" hidden></div>
+    <p class="dd-chart__note mono" id="chartNote" hidden></p>
+  </section>
+  <button type="button" class="dd-chip dd-chart-chip" id="chartChip" hidden>chart</button>
+  <!-- The map's cluster menu: a fold button on its corner, and the card it
+       folds to -- its own top card, the token's nameplate. The menu itself
+       is the shared block's; DiDo only hides it. -->
+  <!-- What the field is showing while it is not the final answer yet. -->
+  <div class="dd-mapstate mono" id="mapState" hidden aria-live="polite">
+    <span class="dd-mapstate__t" id="mapStateText"></span>
+    <span class="dd-mapstate__bar" id="mapStateBar" hidden><i id="mapStateFill"></i></span>
+  </div>
+  <button type="button" class="dd-railfold" id="railFold" hidden aria-label="fold the clusters">▾</button>
+  <button type="button" class="dd-railcard" id="railChip" hidden aria-label="show the clusters"></button>
+
+  <!-- DigitalDon elsewhere, on the welcome only: a glass ball with a globe in
+       the bottom-left corner that opens into a pill of the official marks
+       under the pointer (a tap on touch). Monochrome like everything else:
+       no brand colours, emphasis by opacity. -->
+  <nav class="dd-soc" id="soc" aria-label="DigitalDon elsewhere">
+    <button type="button" class="dd-soc__ball" id="socBall" aria-expanded="false" aria-controls="socLinks" aria-label="DigitalDon elsewhere" title="DigitalDon elsewhere"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M3.8 7.2h16.4M3.8 16.8h16.4M12 2.5c2.6 2.5 3.9 5.7 3.9 9.5s-1.3 7-3.9 9.5c-2.6-2.5-3.9-5.7-3.9-9.5s1.3-7 3.9-9.5Z"/></svg></button>
+    <div class="dd-soc__links" id="socLinks">
+      <a class="dd-soc__a" href="https://digitaldon.net/" target="_blank" rel="noopener noreferrer" title="the web" aria-label="DigitalDon on the web">{{LOGO_SVG}}</a>
+      <a class="dd-soc__a" href="https://x.com/digitaldon_tech" target="_blank" rel="noopener noreferrer" title="X" aria-label="DigitalDon on X"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></a>
+      <a class="dd-soc__a" href="https://t.me/digitaldon_official" target="_blank" rel="noopener noreferrer" title="Telegram" aria-label="DigitalDon on Telegram"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg></a>
+      <a class="dd-soc__a" href="https://github.com/bambini-tech/digitaldon-public" target="_blank" rel="noopener noreferrer" title="GitHub" aria-label="DigitalDon on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+      <a class="dd-soc__a" href="https://digitaldon.gitbook.io/digitaldon" target="_blank" rel="noopener noreferrer" title="GitBook" aria-label="DigitalDon on GitBook"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.513 1.097c-.645 0-1.233.34-2.407 1.017L3.675 5.82A7.233 7.233 0 0 0 0 12.063v.236a7.233 7.233 0 0 0 3.667 6.238L7.69 20.86c2.354 1.36 3.531 2.042 4.824 2.042 1.292.001 2.47-.678 4.825-2.038l4.251-2.453c1.177-.68 1.764-1.02 2.087-1.579.323-.56.324-1.24.323-2.6v-2.63a1.04 1.04 0 0 0-1.558-.903l-8.728 5.024c-.587.337-.88.507-1.201.507-.323 0-.616-.168-1.204-.506l-5.904-3.393c-.297-.171-.446-.256-.565-.271a.603.603 0 0 0-.634.368c-.045.111-.045.282-.043.625.002.252 0 .378.025.494.053.259.189.493.387.667.089.077.198.14.416.266l6.315 3.65c.589.34.884.51 1.207.51.324 0 .617-.17 1.206-.509l7.74-4.469c.202-.116.302-.172.377-.13.075.044.075.16.075.392v1.193c0 .34.001.51-.08.649-.08.14-.227.224-.522.394l-6.382 3.685c-1.178.68-1.767 1.02-2.413 1.02-.646 0-1.236-.34-2.412-1.022l-5.97-3.452-.043-.025a4.106 4.106 0 0 1-2.031-3.52V11.7c0-.801.427-1.541 1.12-1.944a1.979 1.979 0 0 1 1.982-.001l4.946 2.858c1.174.679 1.762 1.019 2.407 1.02.645 0 1.233-.34 2.41-1.017l7.482-4.306a1.091 1.091 0 0 0 0-1.891L14.92 2.11c-1.175-.675-1.762-1.013-2.406-1.013Z"/></svg></a>
+      <a class="dd-soc__a" href="https://www.coingecko.com/en/coins/digitaldon" target="_blank" rel="noopener noreferrer" title="CoinGecko" aria-label="DigitalDon on CoinGecko"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="M12 .4a11.6 11.6 0 1 0 0 23.2a11.6 11.6 0 1 0 0-23.2ZM12 1.8a10.2 10.2 0 1 0 0 20.4a10.2 10.2 0 1 0 0-20.4ZM2.42 15.49C3.2 10.6 6.2 6.6 10.4 5.7c3.2-.7 5.4 1.2 6.9 2.6 1.5 1.2 2.6 2 2.4 3.4-.2 1.5-2.5 2-4.4 2.2-1.1 1.7-1.1 4.7.19 7.68A10.2 10.2 0 0 1 2.42 15.49ZM10 6.8a2.1 2.1 0 1 0 0 4.2a2.1 2.1 0 1 0 0-4.2ZM10 7.55a1.35 1.35 0 1 0 0 2.7a1.35 1.35 0 1 0 0-2.7ZM17.6 9.9a.5 .5 0 1 0 0 1a.5 .5 0 1 0 0-1Z"/></svg></a>
+    </div>
+  </nav>
+
+  <footer class="dd-ft mono" id="ft">dido for blockscout v{{VERSION}} &middot; engine v{{ENGINE_VERSION}} &middot; holder data by <a class="link-quiet" href="https://www.blockscout.com/" target="_blank" rel="noopener noreferrer">blockscout</a> &middot; not financial advice</footer>
+
+</div>
+<script src="dido.js?v={{VERSION}}"></script>
+</body>
+</html>

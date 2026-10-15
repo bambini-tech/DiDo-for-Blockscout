@@ -19,6 +19,10 @@ export const CHAINS: readonly Chain[] = [
   { key: 'robinhood', name: 'Robinhood Chain', chainId: 4663, explorer: 'https://robinhoodchain.blockscout.com' },
 ];
 
+/** DexScreener's chain ids, which the page keys on, mapped to ours. */
+const ALIASES: Record<string, string> = { ethereum: 'eth', rh: 'robinhood', arb: 'arbitrum' };
+
 export function chainByKey(key: string): Chain | undefined {
-  return CHAINS.find((c) => c.key === key.toLowerCase());
+  const k = key.toLowerCase();
+  return CHAINS.find((c) => c.key === (ALIASES[k] ?? k));
 }

@@ -1,15 +1,28 @@
+import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
 import { BlockscoutClient } from './blockscout/client.js';
 import { buildApp } from './server.js';
 
+// Local runs read .env; on Railway the variables come from the service settings.
+try {
+  process.loadEnvFile();
+} catch {
+  /* no .env: the environment is all there is */
+}
+
 const config = loadConfig();
 if (!config.apiKey) {
-  console.error('BLOCKSCOUT_API_KEY is not set. Get a key at https://dev.blockscout.com and see .env.example.');
-  process.exit(1);
+  console.warn('BLOCKSCOUT_API_KEY is not set: the page and chart run, the holder map and wallet scans do not. See .env.example.');
 }
 
 const client = new BlockscoutClient({ apiKey: config.apiKey, rps: config.rps });
-const app = buildApp({ client, version: config.version, logger: true });
+const app = buildApp({
+  client,
+  version: config.version,
+  logger: true,
+  webDir: fileURLToPath(new URL('../dist/web', import.meta.url)),
+  holderIntel: Boolean(config.apiKey),
+});
 
 app.listen({ port: config.port, host: '0.0.0.0' }).catch((err) => {
   app.log.error(err);

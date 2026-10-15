@@ -39,6 +39,8 @@ export interface LinkOptions {
   /** "Funded together": window, and the members a group needs. */
   togetherWindowSec: number;
   togetherMin: number;
+  /** A wallet with fewer plain transactions than this, ever, is fresh. */
+  freshMaxTxs: number;
 }
 
 export const DEFAULT_LINK_OPTIONS: LinkOptions = {
@@ -48,6 +50,7 @@ export const DEFAULT_LINK_OPTIONS: LinkOptions = {
   sameAmountMin: 3,
   togetherWindowSec: 300,
   togetherMin: 3,
+  freshMaxTxs: 10,
 };
 
 export const REASONS = [
@@ -94,6 +97,11 @@ export interface Cluster {
 export interface WalletInfo {
   funder: string | null;
   fundingKind: FundingTrace['kind'];
+  /** First activity and first funding inflow (unix seconds), for the funding replay. */
+  firstTs: number | null;
+  fundTs: number | null;
+  /** Fewer than `freshMaxTxs` plain transactions in the wallet's whole history. */
+  fresh: boolean;
   trace: 'ok' | 'error' | 'skipped';
   cluster: number | null;
   deployer: boolean;
@@ -147,9 +155,13 @@ export function linkHolders(input: LinkInput): LinkResult {
     const t = input.traces.get(h.address);
     const senders = new Set(t ? inflows(t).map((f) => f.peer) : []);
     const sink = senders.size >= opt.sinkMinSenders;
+    const funding = t ? inflows(t).find((f) => f.peer === t.funder) : undefined;
     wallets[h.address] = {
       funder: t?.funder ?? null,
       fundingKind: t?.kind ?? null,
+      firstTs: t?.firstTs ?? null,
+      fundTs: funding?.ts ?? null,
+      fresh: Boolean(t && t.status === 'ok' && !t.windowFull && t.txCount < opt.freshMaxTxs),
       trace: !t ? 'skipped' : t.status === 'ok' ? 'ok' : 'error',
       cluster: null,
       deployer: h.address === creator,

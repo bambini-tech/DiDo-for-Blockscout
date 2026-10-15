@@ -1,0 +1,1555 @@
+/* DiDo v{{VERSION}} — stylesheet.
+
+   Ink on paper. The same tokens as the Web Analyzer and the widget: there is
+   no accent hue anywhere, emphasis is carried by opacity (1 / .55 / .3 / .14).
+   The holder-map role tints at the bottom of the token block are the one
+   documented exception, and they are the analyzer's own.
+
+   Order matters: the host tokens and the base classes the shared block leans
+   on (HOST_CONTRACT in shared/holdermap/extract.mjs) are defined first, the
+   terminal's own chrome next, and the generated holder-map CSS is stamped
+   LAST so its rules land after everything the host wrote. The few places the
+   host overrides the block are marked "override" and scoped to `.dd-stage`,
+   which outranks the block's own selectors without touching them.
+
+   Nothing here is inline: the page ships under style-src 'self'. */
+
+:root {
+  color-scheme: light;
+  --bg: #fbfbfa;
+  --ink: #0a0a0a;
+  --mute: rgba(10, 10, 10, 0.45);
+  --faint: rgba(10, 10, 10, 0.22);
+  --hair: rgba(10, 10, 10, 0.10);
+  --line: rgba(10, 10, 10, 0.08);
+  --card: #ffffff;
+  --dot: rgba(10, 10, 10, 0.05);
+  --hover-bg: rgba(10, 10, 10, 0.05);
+  --contrast-bg: #0a0a0a;
+  --contrast-ink: #ffffff;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+  --sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  /* Read by the shared holder-map CSS (stamped at the end of this file). */
+  --shadow-soft: 0 24px 70px -32px rgba(10, 10, 10, 0.28), 0 6px 22px -12px rgba(10, 10, 10, 0.10);
+  --btn-ink: #fbfbfa;
+  /* Terminal geometry. --dd-top is the host band above the field; the two
+     dock variables are written by the app from the chart pane's real size,
+     so the block's rail, drawer and zoom pill keep clear of it. */
+  --dd-top: 44px;
+  --dd-dock: 0px;
+  --dd-dock-w: 0px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c0d10;
+  --ink: #ededec;
+  --mute: rgba(237, 237, 236, 0.52);
+  --faint: rgba(237, 237, 236, 0.28);
+  --hair: rgba(237, 237, 236, 0.14);
+  --line: rgba(237, 237, 236, 0.11);
+  --card: #17181c;
+  --dot: rgba(237, 237, 236, 0.06);
+  --hover-bg: rgba(237, 237, 236, 0.08);
+  --contrast-bg: #ededec;
+  --contrast-ink: #0c0d10;
+  --shadow-soft: 0 24px 70px -32px rgba(0, 0, 0, 0.7), 0 6px 22px -12px rgba(0, 0, 0, 0.5);
+  --btn-ink: #0c0d10;
+}
+
+/* Holder-map role tints -- the ONLY coloured values in DiDo, and the same
+   four the analyzer's map uses (webapp/index.html), which is the one
+   documented exception to the monochrome rule. Pale by design. */
+:root {
+  --rim-sniper: hsl(197, 32%, 46%);
+  --rim-bundle: hsl(152, 28%, 40%);
+  --rim-insider: hsl(4, 36%, 50%);
+  --rim-fresh: hsl(42, 38%, 44%);
+  --role-sniper: hsla(197, 40%, 45%, 0.34);
+  --role-bundle: hsla(152, 35%, 40%, 0.30);
+  --role-insider: hsla(4, 45%, 48%, 0.32);
+  --role-fresh: hsla(45, 45%, 48%, 0.28);
+  --hm-dim: 0.2;
+}
+:root[data-theme="dark"] {
+  --rim-sniper: hsl(197, 38%, 60%);
+  --rim-bundle: hsl(152, 32%, 56%);
+  --rim-insider: hsl(4, 42%, 62%);
+  --rim-fresh: hsl(42, 42%, 56%);
+  --role-sniper: hsla(197, 45%, 62%, 0.30);
+  --role-bundle: hsla(152, 40%, 58%, 0.26);
+  --role-insider: hsla(4, 55%, 62%, 0.28);
+  --role-fresh: hsla(45, 50%, 60%, 0.24);
+  --hm-dim: 0.13;
+}
+
+/* ---------- base ---------- */
+* { box-sizing: border-box; }
+/* The app toggles panes with the `hidden` attribute; a display rule on a
+   class must never win over it. */
+[hidden] { display: none !important; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden; /* the field is the page; nothing scrolls but the rail */
+  overscroll-behavior: none;
+}
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
+
+.mono {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.num { font-variant-numeric: tabular-nums; }
+.cap { display: block; }
+.flag {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase;
+  border: 1px dashed var(--faint); border-radius: 999px;
+  padding: 7px 13px; color: var(--mute);
+}
+.flag--warn, .flag--own { border-style: solid; border-color: var(--ink); color: var(--ink); }
+.link-quiet {
+  font-size: 12.5px; color: var(--mute); background: none; cursor: pointer;
+  border: none; border-bottom: 1px solid var(--line); padding: 0 0 2px;
+  font-family: inherit; transition: color .18s, border-color .18s;
+}
+.link-quiet:hover { color: var(--ink); border-color: var(--ink); }
+.xintel__err { margin: 0; padding: 24px; font-size: 12.5px; color: var(--mute); text-align: center; }
+
+/* ---------- the field ----------
+   #stage holds the shared block's shell. The block's own "fullscreen" state
+   is what DiDo runs in permanently: the app calls holderMapApi.setFullscreen
+   and the wrap becomes the viewport under the host band. */
+.dd { position: fixed; inset: 0; }
+/* z-index 0 makes the stage its own stacking context: whatever the shared
+   block layers inside it (the loading veil sits at z 7, the drawer and the
+   tooltip above the canvas) stays under the terminal's chrome. Without it
+   the veil covered the chart, the trail and the chips for as long as the
+   cluster scan ran -- the slow half, exactly when the chart is the thing to
+   look at. */
+.dd-stage {
+  position: absolute; left: 0; right: 0; top: var(--dd-top); bottom: 0; z-index: 0;
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+/* override: the wrap becomes the viewport under the host band. */
+.dd-stage .holder-map-wrap.is-fullscreen {
+  position: fixed; top: var(--dd-top); left: 0; right: 0; bottom: 0;
+  margin: 0; border: 0; border-radius: 0; z-index: 1;
+  /* Clear, so the token's tint (.dd-tint) shows through the field. */
+  background: transparent;
+}
+/* override: the parts of the shared panel that belong to a page, not to a
+   field. The title, the legend, the foot line, the export row and the
+   signal flags are the analyzer's panel furniture; the terminal reads the
+   same facts from the map itself and from its own chrome. */
+.dd-stage .holder-map-title,
+.dd-stage .holder-legend,
+.dd-stage .holder-map-foot,
+.dd-stage .holder-export-row,
+.dd-stage #holderSignalsSlot { display: none; }
+/* override: the loader's bottom skeleton stands for the block's bottom bar;
+   the chart docks in that corner of the terminal instead. */
+.dd-stage .hm-loader__sk--bar { display: none; }
+@media (min-width: 641px) {
+  .dd-stage .hm-loader__sk--rail { max-height: calc(100% - 100px - var(--dd-dock)); overflow: hidden; }
+}
+/* Loading: the shell is not fullscreen yet (setFullscreen comes with the
+   data), so the wrap fills the stage itself in the meantime. */
+.dd-stage > .holder-map-wrap:not(.is-fullscreen) {
+  position: absolute; inset: 0; margin: 0; border: 0; border-radius: 0;
+}
+.dd-stage > .holder-map-wrap:not(.is-fullscreen) .holder-map-canvas { height: 100%; }
+/* override: the chart docks bottom right, over the field. The block's
+   right-hand rail and its drawer stop above it, and the zoom pill sits
+   bottom left, so nothing the map draws lands underneath the chart. Only
+   where the block floats (it stacks below 641px, where the chart is a sheet). */
+@media (min-width: 641px) {
+  .dd-stage .holder-map-wrap.is-fullscreen .hm-rail { max-height: calc(100% - 100px - var(--dd-dock)); }
+  .dd-stage .holder-map-wrap.is-fullscreen .hm-drawer { max-height: calc(100% - 100px - var(--dd-dock)); }
+}
+
+/* ---------- host band ----------
+   One 44px line above the field: the mark and the trail on the left, the
+   security strip in the middle, the search / trade / theme chips on the
+   right. The band itself is a strip of frosted glass, denser than the
+   panes (--band-glass) so the chrome on it stays crisp, with the ground's
+   water running on underneath; the capsules on it are glass too. */
+.dd-band {
+  position: absolute; left: 0; right: 0; top: 0; height: var(--dd-top); z-index: 7; pointer-events: none;
+  background: var(--band-glass); background-image: var(--glass-sheen);
+  -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
+  box-shadow: inset 0 1px 0 var(--glass-inner), inset 0 -1px 0 var(--glass-line), 0 1px 0 var(--glass-rim), 0 12px 30px -24px var(--glass-rim);
+}
+.dd-tl, .dd-tr {
+  position: absolute; top: 0; height: var(--dd-top); z-index: 8;
+  display: flex; align-items: center; gap: 8px;
+}
+.dd-tl { left: 12px; max-width: 46%; }
+.dd-tr { right: 12px; }
+.dd-mark { display: inline-flex; align-items: center; gap: 8px; height: 20px; color: var(--ink); flex: 0 0 auto; text-decoration: none; }
+.dd-mark svg { width: 16px; height: 20px; display: block; flex: 0 0 auto; }
+/* The platform's name beside its mark: DiDo, in ink, the way the website
+   sets its own wordmark. */
+.dd-mark__w { font-family: var(--sans); font-size: 15px; font-weight: 650; letter-spacing: -0.015em; line-height: 1; white-space: nowrap; }
+.dd-trail {
+  display: flex; align-items: baseline; gap: 8px; min-width: 0;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dd-trail b { font-weight: 600; color: var(--ink); letter-spacing: 0.06em; }
+.dd-trail .nm { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.dd-trail .tk { color: var(--mute); letter-spacing: 0.06em; }
+.dd-trail .sep { color: var(--faint); }
+.dd-trail__logo {
+  display: none; flex: 0 0 auto; width: 18px; height: 18px; margin-left: -6px; border-radius: 50%; overflow: hidden;
+  box-shadow: 0 0 0 1px var(--glass-rim);
+}
+.dd-trail__logo.is-in { display: block; }
+.dd-trail__logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dd-trail__ca {
+  appearance: none; flex: 0 0 auto; cursor: pointer; margin-right: -6px;
+  font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute);
+  background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px;
+  transition: color .15s ease, border-color .15s ease;
+}
+.dd-trail__ca:hover, .dd-trail__ca:focus-visible { color: var(--ink); border-color: var(--hair); outline: none; }
+.dd-trail__ca.is-done { color: var(--ink); border-color: var(--ink); }
+.dd-g { width: 12px; height: 12px; display: block; flex: 0 0 auto; }
+.dd-trail__ca { display: inline-flex; align-items: center; gap: 5px; }
+.dd-trail__links.is-none { border-style: dashed; color: var(--faint); }
+.dd-trail__links[aria-expanded="true"] { color: var(--ink); border-color: var(--hair); }
+.dd-trail__n { font-size: 9px; letter-spacing: .04em; }
+
+/* ---------- the project's links ----------
+   A small glass window under the trail's links chip (left/top set by
+   LINKS.place through the CSSOM). One row per link: icon, name, where it
+   really goes; open and copy on the right. Missing basics in dashes. */
+.dd-links {
+  position: fixed; z-index: 30; width: 300px; max-height: calc(100vh - var(--dd-top) - 24px); overflow: auto;
+  padding: 6px; border-radius: 16px;
+  background: var(--pane-solid); background-image: var(--glass-sheen); border: 1px solid var(--glass-line);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  box-shadow: inset 0 1px 0 var(--glass-inner), inset 0 -1px 0 var(--glass-rim), 0 0 0 1px var(--glass-rim), var(--shadow-lift);
+}
+.dd-links__hd { display: flex; align-items: center; gap: 10px; padding: 8px 8px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.dd-links__hd b { display: block; font-size: 13px; font-weight: 600; color: var(--ink); }
+.dd-links__hd span { display: block; margin-top: 2px; font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.dd-links__logo { width: 26px; height: 26px; border-radius: 50%; overflow: hidden; flex: 0 0 auto; background: var(--hover); box-shadow: 0 0 0 1px var(--glass-rim); }
+.dd-links__logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dd-links__x { margin-left: auto; }
+.dd-lrow { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 10px; }
+.dd-lrow:hover, .dd-lrow:focus-within { background: var(--hover); }
+.dd-lrow__ic { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--line); color: var(--ink); }
+.dd-lrow__ic .dd-g { width: 13px; height: 13px; }
+.dd-lrow__t { flex: 1; min-width: 0; color: var(--ink); text-decoration: none; outline: none; }
+.dd-lrow__t b { display: block; font-size: 12.5px; font-weight: 600; }
+.dd-lrow__t span { display: block; line-height: 1.45; font-family: var(--mono); font-size: 10px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-lrow__act { display: flex; gap: 2px; opacity: .55; transition: opacity .15s ease; }
+.dd-lrow:hover .dd-lrow__act, .dd-lrow:focus-within .dd-lrow__act { opacity: 1; }
+.dd-lbtn {
+  appearance: none; width: 24px; height: 24px; display: inline-grid; place-items: center; padding: 0; cursor: pointer;
+  border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--mute); text-decoration: none; font-size: 11px;
+  transition: color .15s ease, border-color .15s ease;
+}
+.dd-lbtn:hover, .dd-lbtn:focus-visible { color: var(--ink); border-color: var(--hair); outline: none; }
+.dd-lbtn.is-done { color: var(--ink); border-color: var(--ink); }
+.dd-links__none { margin: 0; padding: 10px 8px; font-size: 12.5px; color: var(--mute); }
+.dd-links__ft { margin: 4px 0 0; padding: 8px 8px 6px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 9px; letter-spacing: .06em; color: var(--faint); line-height: 1.5; }
+.dd-offscreen { position: fixed; left: -9999px; top: 0; opacity: 0; }
+.dd-sec.is-tight { gap: 8px; }
+.dd-sec.is-tight span { font-size: 0; gap: 0; }
+.dd-sec.is-tight i { width: 7px; height: 7px; }
+.dd-trail .dd-native { border: 1px solid var(--ink); border-radius: 999px; padding: 2px 7px; font-size: 8.5px; color: var(--ink); }
+
+.dd-chip {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--mute); background: color-mix(in srgb, var(--card) 74%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(140%); backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 11px; cursor: pointer; line-height: 1; white-space: nowrap;
+  transition: color .18s, border-color .18s, background .18s, transform .18s;
+}
+.dd-chip:hover { color: var(--ink); border-color: var(--hair); transform: translateY(-1px); }
+.dd-chip.on, .dd-chip[aria-pressed="true"] { background: var(--ink); color: var(--btn-ink); border-color: var(--ink); }
+.dd-chip:disabled, .dd-chip--off { opacity: .3; cursor: default; }
+.dd-chip:disabled:hover { color: var(--mute); border-color: var(--line); transform: none; }
+.dd-chip__k { opacity: .55; margin-left: 4px; }
+
+/* The version line sits at the foot of the empty field. Once a token is on
+   screen the chart note carries the engine version and the disclaimer, and
+   the manifest is one request away. */
+.dd-ft {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3;
+  font-size: 8.5px; letter-spacing: 0.12em; color: var(--faint); white-space: nowrap; pointer-events: none;
+}
+.dd[data-state="live"] .dd-ft, .dd[data-state="loading"] .dd-ft { display: none; }
+
+/* ---------- DigitalDon elsewhere ----------
+   The project's own places, on the welcome only: a ball of the band's glass
+   with a globe in the bottom-left corner. Under the pointer (or a tap, or
+   the keyboard) it opens into a pill of the official marks, in ink, never
+   their brand colours; the pointer leaving folds it back into the ball. */
+.dd-soc {
+  position: absolute; left: 12px; bottom: 12px; z-index: 5;
+  display: none; align-items: center; padding: 3px; border-radius: 999px;
+  background: var(--pane); background-image: var(--glass-sheen); border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  transition: box-shadow .25s ease;
+}
+.dd.has-home .dd-soc { display: flex; }
+.dd-soc__ball {
+  appearance: none; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; flex: 0 0 auto;
+  border: 0; border-radius: 50%; background: none; color: var(--ink); opacity: .7; cursor: pointer;
+  transition: opacity .2s ease, transform .45s cubic-bezier(.2, .8, .2, 1);
+}
+.dd-soc__ball svg { width: 16px; height: 16px; display: block; }
+.dd-soc__ball:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--hair); }
+.dd-soc__links {
+  display: flex; align-items: center; gap: 2px; overflow: hidden;
+  max-width: 0; opacity: 0;
+  transition: max-width .4s cubic-bezier(.2, .8, .2, 1), opacity .2s ease, margin .4s cubic-bezier(.2, .8, .2, 1);
+}
+.dd-soc:hover, .dd-soc:focus-within, .dd-soc.is-open { box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-soft); }
+.dd-soc:hover .dd-soc__ball, .dd-soc:focus-within .dd-soc__ball, .dd-soc.is-open .dd-soc__ball { opacity: 1; transform: rotate(-20deg); }
+.dd-soc:hover .dd-soc__links, .dd-soc:focus-within .dd-soc__links, .dd-soc.is-open .dd-soc__links {
+  max-width: 200px; opacity: 1; margin-left: 2px; transition-delay: 0s, .08s, 0s;
+}
+.dd-soc__a {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; flex: 0 0 auto;
+  color: var(--ink); opacity: .55; text-decoration: none;
+  transition: opacity .18s ease, background-color .18s ease;
+}
+.dd-soc__a svg { width: 13px; height: 13px; display: block; }
+.dd-soc__a:hover, .dd-soc__a:focus-visible { opacity: 1; background: var(--hover-bg); outline: none; }
+.dd-soc__a:focus-visible { box-shadow: 0 0 0 1px var(--hair); }
+@media (prefers-reduced-motion: reduce) {
+  .dd-soc__ball, .dd-soc__links { transition: none; }
+}
+
+/* ---------- security strip ----------
+   From the base holder payload. Four facts, one line, centred in the band.
+   Missing data is written as missing -- never as safe. */
+.dd-sec {
+  position: absolute; top: 0; left: 50%; height: var(--dd-top); transform: translateX(-50%); z-index: 8;
+  display: flex; align-items: center; gap: 12px; max-width: 40%;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute);
+  white-space: nowrap; overflow: hidden;
+}
+.dd-sec span { display: inline-flex; align-items: center; gap: 5px; }
+.dd-sec .is-bad { color: var(--ink); border-bottom: 1px solid var(--ink); }
+.dd-sec .is-none { opacity: .55; }
+.dd-sec i {
+  width: 6px; height: 6px; border-radius: 50%; border: 1px solid currentColor; display: inline-block;
+}
+.dd-sec .is-ok i { background: currentColor; }
+.dd-sec .is-bad i { background: currentColor; }
+.dd-sec .is-none i { border-style: dashed; }
+
+/* ---------- search pill ----------
+   Always in the centre of the band: a narrow glass pill (--search-w) that
+   widens to --search-wide under the pointer, on focus or with "/" (.is-open),
+   and narrows again when left. With no token on screen it stays wide -- it
+   is the way in. It widens over its neighbours, so wide it is denser glass. */
+:root { --search-w: 230px; --search-wide: min(520px, calc(100vw - 32px)); }
+.dd-search {
+  position: absolute; left: 50%; top: calc((var(--dd-top) - 32px) / 2); transform: translateX(-50%); z-index: 9;
+  width: var(--search-w); height: 32px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 3px 0 12px;
+  border: 1px solid var(--hair); border-radius: 999px;
+  transition: width .32s cubic-bezier(.2, .8, .2, 1), top .5s cubic-bezier(.2, .8, .2, 1), height .5s cubic-bezier(.2, .8, .2, 1),
+    border-color .2s ease, background-color .2s ease;
+}
+/* The start screen: until the first search, the pill waits large in the
+   middle of the field, the way in; the first search sends it up into the
+   band (.has-run on the app), where it stays for the session. */
+.dd:not(.has-run):not(.has-home) .dd-search { top: calc(50% - 76px); height: 46px; padding: 0 5px 0 16px; box-shadow: var(--shadow-lift); }
+.dd:not(.has-run):not(.has-home) .dd-search input { font-size: 13px; }
+.dd:not(.has-run):not(.has-home) .dd-search__go { padding: 9px 16px; font-size: 11px; }
+.dd-search:hover, .dd-search:focus-within, .dd-search.is-open, .dd[data-state="idle"] .dd-search, .dd[data-state="error"] .dd-search {
+  width: var(--search-wide); background-color: var(--pane-solid);
+}
+.dd-search:focus-within { border-color: var(--ink); }
+.dd-search__k { flex: 0 0 auto; font-size: 9px; padding: 2px 7px; margin-right: 6px; border: 1px solid var(--line); border-radius: 6px; color: var(--faint); }
+.dd-search__go { display: none; }
+.dd-search:hover .dd-search__k, .dd-search:focus-within .dd-search__k, .dd-search.is-open .dd-search__k,
+.dd[data-state="idle"] .dd-search__k, .dd[data-state="error"] .dd-search__k { display: none; }
+.dd-search:hover .dd-search__go, .dd-search:focus-within .dd-search__go, .dd-search.is-open .dd-search__go,
+.dd[data-state="idle"] .dd-search__go, .dd[data-state="error"] .dd-search__go { display: inline-block; }
+.dd-search__glyph { color: var(--faint); font-size: 14px; }
+.dd-search input {
+  flex: 1; min-width: 0; border: 0; outline: none; background: transparent;
+  font-family: var(--mono); font-size: 12px; letter-spacing: -0.01em; color: var(--ink);
+  padding: 4px 0;
+}
+.dd-search input::placeholder { font-family: var(--sans); color: var(--faint); letter-spacing: 0; }
+.dd-search__go {
+  border: 1px solid var(--ink); background: var(--contrast-bg); color: var(--contrast-ink);
+  border-radius: 999px; padding: 6px 12px; cursor: pointer;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  transition: opacity .2s ease;
+}
+.dd-search__go:hover { opacity: .85; }
+.dd-search__go:disabled { opacity: .4; cursor: default; }
+.dd-search__rows {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+  display: flex; flex-direction: column; gap: 2px; padding: 6px;
+  border: 1px solid var(--line); border-radius: 18px;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: var(--shadow-soft);
+}
+.dd-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  width: 100%; text-align: left; border: 0; background: transparent; cursor: pointer;
+  padding: 9px 12px; border-radius: 12px; transition: background .18s;
+}
+.dd-row:hover, .dd-row.is-on { background: var(--hover-bg); }
+.dd-row .nm { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-row .nm .mono { margin-left: 8px; }
+.dd-row .mt { white-space: nowrap; }
+.dd-row--note { cursor: default; color: var(--mute); font-size: 12px; }
+.dd-row--note:hover { background: transparent; }
+
+/* ---------- the empty field ---------- */
+.dd-empty {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3;
+  text-align: center; width: min(520px, calc(100% - 32px)); pointer-events: none;
+}
+.dd-empty__t { margin: 0 0 8px; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+.dd-empty__s { margin: 0; font-size: 9.5px; color: var(--faint); }
+.dd[data-state="loading"] .dd-empty__t { color: var(--mute); }
+.dd-empty__t.is-err { font-size: 15px; font-weight: 500; color: var(--mute); }
+.dd[data-state="idle"] .dd-empty { top: calc(50% + 24px); transform: translate(-50%, 0); }
+
+/* ---------- chart pane ----------
+   Docked bottom right over the field, one of three sizes, or the whole
+   field (max), or folded to a chip. The app mirrors the pane's box into
+   --dd-dock / --dd-dock-w so the map's furniture moves out of its way. */
+.dd-chart {
+  position: fixed; right: 12px; bottom: 12px; z-index: 6;
+  display: flex; flex-direction: column;
+  width: 34vw; min-width: 420px; height: 300px; min-height: 200px;
+  border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--shadow-soft);
+}
+.dd-chart[data-size="sm"] { width: 360px; min-width: 0; height: 220px; }
+.dd-chart[data-size="lg"] { width: 48vw; min-width: 520px; height: 44vh; min-height: 320px; }
+.dd-chart[data-size="max"] {
+  left: 0; right: 0; top: var(--dd-top); bottom: 0; width: auto; height: auto; min-width: 0;
+  border-radius: 0; border: 0; z-index: 9;
+  background: var(--card);
+}
+.dd-chart__hd {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px;
+  padding: 8px 8px 6px 12px; min-height: 36px;
+}
+.dd-tape {
+  display: flex; flex: 1 1 260px; align-items: center; gap: 8px; min-width: 0;
+  font-size: 11px; letter-spacing: 0.06em; color: var(--mute);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dd-tape b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
+.dd-tape .sep { color: var(--faint); }
+/* The live dot: four states. fresh = the price is from within the poll
+   window; polling = a request is out; stale = the last poll failed; off =
+   nothing is polling (fullscreen paused, tab hidden). Shape and opacity,
+   never colour. */
+.dd-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink); flex: 0 0 auto; }
+.dd-dot[data-state="polling"] { animation: dd-pulse 1s ease-in-out infinite; }
+.dd-dot[data-state="stale"] { background: transparent; border: 1px solid var(--ink); }
+.dd-dot[data-state="off"] { opacity: .3; }
+@keyframes dd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+.dd-chart__ctl { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-left: auto; }
+.dd-chart__ctl .dd-chip { padding: 5px 8px; position: relative; z-index: 3; }   /* over the top-right grip where they meet */
+.dd-tfs { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 999px; margin-right: 4px; }
+.dd-tfs .dd-chip { border: 0; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 4px 7px; }
+.dd-tfs .dd-chip:hover { transform: none; }
+.dd-tfs .dd-chip.on { background: var(--ink); color: var(--btn-ink); }
+.dd-chart__plot { position: relative; flex: 1 1 auto; min-height: 0; cursor: crosshair; touch-action: none; user-select: none; -webkit-user-select: none; }
+.dd-chart.is-panning .dd-chart__plot { cursor: grabbing; }
+.dd-chart.is-measure .dd-chart__plot { cursor: cell; }
+.dd-chart__plot svg { display: block; width: 100%; height: 100%; }
+.dd-chart__plot.is-empty::after {
+  content: attr(data-note); position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 24px;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint);
+}
+/* A grip on each corner: the pane can sit anywhere, so any corner may be
+   the one in reach. Each grip's two strokes sit in its own corner. */
+.dd-chart__grip {
+  --g: 135deg;
+  position: absolute; width: 16px; height: 16px; z-index: 2;
+  background: linear-gradient(var(--g), var(--faint) 0, var(--faint) 1px, transparent 1px, transparent 5px, var(--faint) 5px, var(--faint) 6px, transparent 6px);
+  opacity: .6;
+}
+.dd-chart__grip[data-c="tl"] { left: 0; top: 0; cursor: nwse-resize; }
+.dd-chart__grip[data-c="tr"] { right: 0; top: 0; cursor: nesw-resize; --g: 225deg; }
+.dd-chart__grip[data-c="bl"] { left: 0; bottom: 0; cursor: nesw-resize; --g: 45deg; }
+.dd-chart__grip[data-c="br"] { right: 0; bottom: 0; cursor: nwse-resize; --g: 315deg; }
+.dd-chart[data-size="max"] .dd-chart__grip { display: none; }
+.dd-chart__note {
+  display: flex; gap: 12px; align-items: baseline;
+  margin: 0; padding: 4px 12px 8px; font-size: 11px; letter-spacing: 0.06em; color: var(--faint);
+  white-space: nowrap; overflow: hidden;
+}
+.dd-note__l { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+/* The hovered bar's OHLC. It has the right of way: on a narrow pane the
+   standing note ellipses away rather than pushing the readout off. */
+.dd-note__r { flex: 0 0 auto; margin-left: auto; color: var(--ink); }
+@media (max-width: 640px) { .dd-note__r { display: none; } }
+.dd-chart-chip { position: fixed; right: 12px; bottom: 12px; z-index: 6; }
+
+/* The chart's vocabulary is the analyzer's (webapp/index.html, the chart
+   section): 1px ink wicks at .9, up bodies in paper, down bodies in ink,
+   hairline gridlines, mono labels on the right rail, and the plan's four
+   bands drawn the way the analyzer's legend keys them. Kept in classes
+   rather than presentation attributes because the page ships under
+   style-src 'self' and the theme has to reach them. */
+.c-grid { stroke: var(--line); stroke-width: 1; }
+.c-tickmark { stroke: var(--faint); stroke-width: 1; }
+.c-lbl { font-family: var(--mono); fill: var(--mute); }
+.c-zl { font-family: var(--mono); letter-spacing: 0.1em; fill: var(--mute); }
+.c-wick { stroke: var(--ink); stroke-width: 1; opacity: .9; }
+.c-up { fill: var(--card); stroke: var(--ink); stroke-width: 1; }
+.c-dn { fill: var(--ink); stroke: var(--ink); stroke-width: 1; }
+.c-vol { fill: var(--ink); opacity: .14; }
+.c-ema { fill: none; stroke: var(--ink); stroke-width: 1; opacity: .55; }
+.c-ema--slow { stroke-dasharray: 3 3; opacity: .35; }
+
+/* The plan's four bands. Short term is filled, long term is outlined: the
+   trade you could take now reads solid, the one you are waiting for reads
+   as a boundary. */
+.c-lv { fill: none; stroke: none; }
+.c-lv--entrySt { fill: var(--hair); }
+.c-lv--exitSt { fill: var(--hair); }
+.c-lv--entryLt { stroke: var(--mute); stroke-width: 1; stroke-dasharray: 1 3; }
+.c-lv--exitLt { stroke: var(--hair); stroke-width: 1; stroke-dasharray: 2 3; }
+.c-ln { fill: none; }
+.c-ln--exitSt { stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 5 4; }
+.c-ln--exitLt { stroke: var(--mute); stroke-width: 1.2; stroke-dasharray: 2 5; }
+
+/* Rail pills: the hovered price, the level names, the levels this view
+   cannot hold. */
+.c-pill { fill: var(--ink); }
+.c-pill--tag { fill: var(--card); stroke: var(--hair); stroke-width: 1; }
+.c-pill--edge { fill: var(--card); stroke: var(--hair); stroke-width: 1; }
+.c-pill--last { fill: var(--card); stroke: var(--ink); stroke-width: 1; }
+.c-pill-lbl { font-family: var(--mono); fill: var(--btn-ink); }
+.c-pill-lbl--tag { fill: var(--ink); }
+.c-pill-lbl--edge { fill: var(--mute); }
+.c-pill-lbl--last { fill: var(--ink); }
+.c-box { fill: var(--ink); }
+.c-box-lbl { font-family: var(--mono); fill: var(--btn-ink); }
+
+.c-rug { stroke: var(--ink); stroke-width: 1; opacity: .3; }
+.c-rug--role { opacity: .7; }
+.c-cross { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 3; }
+.c-last { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 1 3; }
+.c-meas { fill: var(--hair); stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 3; }
+
+/* ---------- the chart legend ----------
+   One button per level, the analyzer's legend in the pane's foot. Switching
+   one off takes it off the price scale too, which is how a viewer gets the
+   candles back when a long-term target is far away. */
+.dd-chart__legend {
+  display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center;
+  padding: 2px 12px 0; margin: 0;
+}
+.dd-chart__legend button {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 2px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute);
+}
+.dd-chart__legend button:hover { color: var(--ink); }
+.dd-chart__legend button.is-off { text-decoration: line-through; text-decoration-color: var(--faint); }
+.dd-chart__legend button.is-off .c-key { opacity: .3; }
+.c-key { width: 14px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+.c-key--entrySt { background: var(--hair); }
+.c-key--exitSt { background: var(--hair); border-top: 2px dashed var(--ink); }
+.c-key--entryLt { border: 1px dashed var(--mute); }
+.c-key--exitLt { border: 1px dotted var(--hair); border-top: 2px dotted var(--mute); }
+.dd-chart[data-size="sm"] .dd-chart__legend { display: none; }
+
+/* ---------- phones: the chart is a sheet ---------- */
+@media (max-width: 640px) {
+  :root { --dd-top: 40px; }
+  .dd-sec { display: none; }
+  .dd-tl { max-width: 55%; }
+  /* phones: a round glyph docked beside the chips (right: set by fitBand)
+     that opens across the whole band */
+  :root { --search-w: 32px; --search-wide: calc(100vw - 24px); }
+  .dd-search { left: auto; transform: none; padding: 0 3px 0 10px; }
+  .dd-trail { flex-shrink: 0; }
+  .dd-tl .dd-ticker { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+  .dd-trail .ch, .dd-trail .ch-sep, .dd-trail .nm-sep { display: none; }
+  /* a token on screen: the trail's logo is the mark the band needs */
+  .dd:not([data-state="idle"]) .dd-mark { display: none; }
+  .dd-tl { gap: 6px; }
+  .dd-tl .dd-trail { gap: 6px; padding: 0 8px; }
+  .dd-tl .dd-ticker { padding: 0 7px; gap: 8px; }
+  .dd-trail__logo { margin-left: -3px; }
+  .dd-search:not(.is-open):not(:focus-within) input { flex: 0 0 0; width: 0; padding: 0; opacity: 0; }
+  .dd-search:not(.is-open):not(:focus-within) { cursor: pointer; }
+  .dd-links { width: calc(100vw - 24px); }
+  .dd-trail__ca { padding: 3px 6px; }
+  .dd-search:focus-within, .dd-search.is-open, .dd[data-state="idle"] .dd-search, .dd[data-state="error"] .dd-search { right: 12px !important; }
+  .dd-search:not(.is-open):not(:focus-within) .dd-search__glyph { margin-left: -1px; }
+  .dd-search__k, .dd-tr #tradeChip { display: none; }
+  .dd-trail .nm { display: none; }
+  .dd-trail .tk { color: var(--ink); font-weight: 600; }
+  .dd-chart, .dd-chart[data-size="sm"], .dd-chart[data-size="lg"] {
+    left: 0; right: 0; bottom: 0; width: auto; min-width: 0;
+    height: 40vh; min-height: 200px; border-radius: 18px 18px 0 0; border-bottom: 0;
+  }
+  .dd-chart[data-size="sm"] { height: 26vh; }
+  .dd-chart[data-size="lg"] { height: 56vh; }
+  .dd-chart[data-size="max"] { top: var(--dd-top); height: auto; border-radius: 0; }
+  .dd-chart__grip { display: none; }
+  .dd-chart__ctl .dd-chip { padding: 5px 6px; }
+  .dd-empty__t { font-size: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-dot[data-state="polling"] { animation: none; opacity: .55; }
+  .dd-chip, .dd-search, .dd-row { transition: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Glass — the Web Analyzer's 2.0 surface, on the terminal's chrome
+   ═══════════════════════════════════════════════════════════════════════════
+   The same glass tokens as webapp/index.html (the "glass topping" block):
+   frosted pane, 120deg sheen, white top glow, hairline rim, specular top
+   edge, lifted shadow. Here the map is the water: every pane floats over the
+   field and blurs it. Monochrome throughout -- the analyzer's two blooms
+   live in its own `.pool` ground and do not come here (CLAUDE.md, second
+   rule: they must not spread). `--card` stays opaque, because the shared
+   map paints its floor with it; the panes read `--pane` instead. */
+:root {
+  --pane: rgba(255, 255, 255, 0.62);
+  --pane-solid: rgba(255, 255, 255, 0.86);
+  --band-glass: rgba(255, 255, 255, 0.74);
+  --glass-line: rgba(255, 255, 255, 0.7);
+  --glass-inner: rgba(255, 255, 255, 1);
+  --glass-spec: #ffffff;
+  --glass-rim: rgba(10, 10, 10, 0.08);
+  --glass-sheen: linear-gradient(120deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.12) 38%, rgba(255,255,255,0) 60%, rgba(255,255,255,0.25) 100%);
+  --shadow-lift: 0 30px 80px -36px rgba(10, 10, 10, 0.32), 0 10px 30px -16px rgba(10, 10, 10, 0.14);
+  /* The watchlist's verdict tints. The holder map's own role washes reused,
+     exactly as the analyzer's --wl-go / --wl-wait / --wl-under do; no new
+     hue (CLAUDE.md, decided 2026-10-01). Text on them stays ink. */
+  --wl-go: var(--role-bundle);
+  --wl-wait: var(--role-fresh);
+  --wl-under: var(--role-insider);
+}
+:root[data-theme="dark"] {
+  --pane: rgba(30, 32, 37, 0.56);
+  --pane-solid: rgba(24, 25, 30, 0.86);
+  --band-glass: rgba(22, 24, 29, 0.72);
+  --glass-line: rgba(255, 255, 255, 0.16);
+  --glass-inner: rgba(255, 255, 255, 0.32);
+  --glass-spec: rgba(255, 255, 255, 0.85);
+  --glass-rim: rgba(0, 0, 0, 0.35);
+  --glass-sheen: linear-gradient(120deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.04) 38%, rgba(255,255,255,0) 60%, rgba(255,255,255,0.08) 100%);
+  --shadow-lift: 0 30px 80px -36px rgba(0, 0, 0, 0.8), 0 10px 30px -16px rgba(0, 0, 0, 0.6);
+}
+/* The frost. A plain blur and nothing chained after it: the analyzer's
+   saturate() and brightness() passes each cost a full extra filter pass, and
+   here the glass sits over a map that moves -- every frame the bubbles
+   settle, every pane re-filters what is under it. Measured in Chromium,
+   the chained 28px frost dropped frames during a drag and while the map
+   settled; a single 18px blur reads the same over an ink-on-paper field
+   (there is no colour to saturate) and holds the frame rate. Small chips
+   take less; a chip inside a pane takes none, since the pane already
+   frosts what is behind both. */
+.dd-search, .dd-search__rows, .dd-chart, .dd-pane {
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+.dd-chip, .dd-trail, .dd-sec {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.dd-chart .dd-chip, .dd-pane .dd-chip {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.dd-chip {
+  background: var(--pane); background-image: var(--glass-sheen); border-color: var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim);
+}
+.dd-chip:hover { border-color: var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-soft); }
+.dd-chip.on, .dd-chip[aria-pressed="true"] { background: var(--ink); background-image: none; color: var(--btn-ink); border-color: var(--ink); }
+.dd-chip:disabled:hover { border-color: var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim); }
+/* The trail and the security strip become two capsules on the band, the
+   analyzer's island nav in miniature. Empty, they take no room. */
+.dd-trail, .dd-sec {
+  height: 30px; align-items: center; padding: 0 12px; border-radius: 999px;
+  background: var(--pane); background-image: var(--glass-sheen); border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim);
+}
+.dd-sec { top: 7px; height: 30px; left: auto; right: 260px; transform: none; max-width: none; } /* right: set by fitBand() */
+.dd-trail:empty { display: none; }
+.dd-search, .dd-search__rows, .dd-chart, .dd-pane {
+  position: absolute;
+  background: var(--pane); background-image: var(--glass-sheen); border-color: var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-inner), inset 0 -1px 0 var(--glass-rim), 0 0 0 1px var(--glass-rim), var(--shadow-lift);
+}
+.dd-chart { position: fixed; }
+.dd-search:focus-within { border-color: var(--ink); }
+.dd-chart[data-size="max"] { background: var(--pane-solid); background-image: none; box-shadow: none; }
+/* The specular top edge, the light catching the glass. */
+.dd-chart::before, .dd-pane::before, .dd-search::before {
+  content: ''; position: absolute; left: 14%; right: 14%; top: -1px; height: 1px; z-index: 2;
+  background: linear-gradient(90deg, transparent, var(--glass-spec), transparent); pointer-events: none;
+}
+.dd-chart[data-size="max"]::before { display: none; }
+.dd-chip__dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-left: 5px; background: var(--rim-bundle); vertical-align: 1px; }
+
+/* ---------- the ticker ----------
+   The token's numbers, in a capsule beside its name: the price in ink and a
+   size up, its 24h move with a direction glyph (never a hue), then market
+   cap, liquidity and volume as label + value. Parts the band has no room for
+   are hidden by fitBand(), lowest priority first. */
+.dd-ticker {
+  display: flex; align-items: center; gap: 12px; height: 30px; padding: 0 12px; border-radius: 999px; flex: none;
+  font-size: 10px; letter-spacing: 0.06em; text-transform: none; color: var(--mute); white-space: nowrap;
+  background: var(--pane); background-image: var(--glass-sheen); border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.dd-ticker i { font-style: normal; color: var(--faint); text-transform: uppercase; letter-spacing: 0.12em; font-size: 9px; }
+.dd-ticker b { font-weight: 500; color: var(--ink); }
+.dd-ticker__px { color: var(--ink); font-size: 12px; font-weight: 600; letter-spacing: 0; }
+.dd-ch { color: var(--ink); }
+.dd-ch--up::before { content: '▲ '; font-size: 7px; opacity: .6; }
+.dd-ch--dn::before { content: '▼ '; font-size: 7px; opacity: .6; }
+.dd-tl { max-width: none; right: auto; }
+
+/* ---------- the ground: frosted water in the token's colours ----------
+   The website's pool (the same light-through-water shader), seen through
+   frosted glass and turned right down: drawn small, softened by one blur,
+   moving at a sixth of the website's pace, redrawn about six times a second.
+   The water's light and two blooms under it take the colours of the token on
+   screen, read from its logo (bot /api/token-tint); a logo without a clear
+   colour leaves the website's own plain light. The pointer stirs it, far more
+   gently than on the website.
+   The fourth documented exception to the monochrome rule (CLAUDE.md): it is
+   the TOKEN's colour, like its logo, never DigitalDon's chrome; it sits
+   behind the field, never on text, a control or data.
+   Cost: the blooms are transform-only animations of pre-blurred layers (the
+   compositor moves them, nothing repaints); the water is one small WebGL
+   canvas (dido.js `ground`) whose single blur pass runs only when it is
+   redrawn. */
+:root {
+  --tint-a: transparent; --tint-b: transparent; --tint-glow: 22%;
+  --water-rgb: 40,44,58; --water-gain: 84; --water-blur: 14px;
+}
+:root[data-theme="dark"] { --water-rgb: 223,233,255; --water-gain: 160; }
+.dd-tint {
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0; z-index: 0;
+  overflow: hidden; pointer-events: none; contain: strict;
+}
+.dd-tint i {
+  position: absolute; border-radius: 50%; will-change: transform; filter: blur(60px);
+  opacity: 0; transition: opacity 1.6s ease;
+}
+.dd.has-tint .dd-tint i { opacity: 1; }
+.dd-tint__a {
+  left: -10vmax; top: -12vmax; width: 80vmax; height: 44vmax;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tint-a) var(--tint-glow), transparent), transparent);
+  animation: dd-pool-a 267s ease-in-out infinite alternate;
+}
+.dd-tint__b {
+  right: -24vmax; bottom: -20vmax; width: 70vmax; height: 40vmax;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tint-b) var(--tint-glow), transparent), transparent);
+  animation: dd-pool-b 320s ease-in-out infinite alternate;
+}
+@keyframes dd-pool-a { to { transform: translate3d(18vmax, 12vmax, 0) rotate(18deg); } }
+@keyframes dd-pool-b { to { transform: translate3d(-22vmax, -10vmax, 0) rotate(-14deg); } }
+/* bled past the edges so the blur has no dark rim */
+.dd-tint__water {
+  position: absolute; left: -40px; top: -40px; width: calc(100% + 80px); height: calc(100% + 80px);
+  display: block; filter: blur(var(--water-blur)); opacity: 0; transition: opacity 1.2s ease;
+}
+.dd-tint__water.is-on { opacity: 1; }
+.dd-tint__grain {
+  position: absolute; inset: 0; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+@media (prefers-reduced-motion: reduce) { .dd-tint i { animation: none; } }
+
+/* ---------- the map's state chip ----------
+   Under the map's summary, top left: mapping (a slow pulse, the seconds
+   counting), an older map being refreshed, or clusters that failed. */
+.dd-mapstate {
+  position: absolute; left: 12px; top: calc(var(--dd-top) + 46px); z-index: 7; margin: 0;
+  padding: 6px 11px; border-radius: 999px; font-size: 9px; color: var(--ink);
+  background: var(--pane); background-image: var(--glass-sheen); border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  animation: dd-fade .18s ease-out backwards;
+}
+.dd-mapstate[data-state="mapping"] .dd-mapstate__t::before {
+  content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%;
+  background: var(--ink); vertical-align: 1px; animation: dd-pulse 1.4s ease-in-out infinite;
+}
+.dd-mapstate[data-state="failed"] { color: var(--mute); border-style: dashed; }
+/* The progress bar: the bot's own count of traced wallets, weighted by what
+   each phase costs. Grows smoothly between polls. */
+.dd-mapstate { display: grid; gap: 6px; max-width: min(360px, calc(100% - 24px)); border-radius: 14px; }
+.dd-mapstate__bar { display: block; height: 3px; border-radius: 3px; background: var(--hair); overflow: hidden; }
+.dd-mapstate__bar i { display: block; height: 100%; width: 0; background: var(--ink); border-radius: 3px; transition: width .9s cubic-bezier(.2,.8,.2,1); }
+@media (prefers-reduced-motion: reduce) { .dd-mapstate__bar i { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .dd-mapstate[data-state="mapping"] .dd-mapstate__t::before { animation: none; } }
+
+/* ---------- the group menu's fold ----------
+   A small round button on the rail's top-right corner, placed by the app
+   from the rail's real box; folded, the chip takes the same corner. */
+.dd-railfold {
+  position: fixed; z-index: 7; width: 22px; height: 22px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--pane-solid); color: var(--mute); cursor: pointer;
+  font-size: 10px; line-height: 20px; text-align: center;
+}
+.dd-railfold:hover { color: var(--ink); border-color: var(--hair); }
+/* The folded menu: its own top card. The nameplate inside is the block's
+   (.hm-token, cloned), so it keeps the rail's look exactly; the button only
+   positions it and adds the count on the right. */
+.dd-railcard {
+  position: fixed; z-index: 7; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  padding: 0; border: 0; background: none; cursor: pointer; text-align: left; color: inherit;
+  animation: dd-fade .18s ease-out backwards;
+}
+.dd-railcard .hm-token { grid-column: 1 / -1; grid-row: 1; padding-right: 36px; transition: border-color .18s; }
+.dd-railcard:hover .hm-token { border-color: var(--hair); }
+.dd-railcard__more {
+  grid-column: 2; grid-row: 1; position: relative; z-index: 1; margin-right: 8px;
+  width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); background: var(--pane-solid);
+  font-size: 10px; line-height: 20px; text-align: center; color: var(--mute); pointer-events: none;
+}
+.dd-railcard:hover .dd-railcard__more { color: var(--ink); border-color: var(--hair); }
+/* "Cluster" beside the token's name, on the rail and on the folded card,
+   so the menu says what it is. Set from the host's side: the nameplate is
+   the shared block's. */
+.dd-stage .hm-token__t b::after, .dd-railcard .hm-token__t b::after {
+  content: 'Cluster'; margin-left: 7px; font-family: var(--mono); font-size: 8.5px; font-weight: 400;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--mute);
+}
+/* room on the rail's nameplate for the fold button on its corner */
+.dd-stage .hm-rail .hm-token { padding-right: 36px; }
+/* override: the folded rail is hidden from DiDo's side, never removed. */
+.dd.rail-folded .dd-stage .hm-rail,
+.dd.rail-folded .dd-stage .hm-loader__sk--rail { display: none; }
+
+/* ---------- panes: the watchlist and the wallet ----------
+   Two glass panels under the band. The watchlist drops from its chip on the
+   right; a wallet opens on the left as a place of its own, so the map it was
+   opened from stays in view beside it. Both stop above the docked chart. */
+.dd-pane {
+  z-index: 10; display: flex; flex-direction: column; min-height: 0;
+  top: calc(var(--dd-top) + 6px); bottom: 12px;
+  width: min(400px, calc(100% - 24px));
+  border: 1px solid var(--glass-line); border-radius: 20px; overflow: hidden;
+}
+.dd-wl { right: 12px; bottom: auto; max-height: calc(100% - var(--dd-top) - 18px - var(--dd-dock)); }
+.dd-wal { left: 12px; bottom: auto; width: min(440px, calc(100% - 24px)); max-height: calc(100% - var(--dd-top) - 18px); }
+.dd-pane__hd { display: flex; align-items: center; gap: 6px; padding: 10px 10px 8px 16px; }
+.dd-pane__t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); }
+.dd-pane__t small { color: var(--mute); letter-spacing: 0.08em; margin-left: 6px; }
+.dd-pane__hd .dd-chip { padding: 5px 9px; }
+.dd-pane__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 10px 10px; scrollbar-width: thin; }
+.dd-pane__ft { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px 12px; border-top: 1px solid var(--line); font-size: 8.5px; color: var(--faint); }
+.dd-link { appearance: none; border: 0; background: none; padding: 0 0 1px; cursor: pointer; border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute); }
+.dd-link:hover { color: var(--ink); border-color: var(--ink); }
+.dd-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--hover-bg); }
+.dd-seg button { appearance: none; border: 0; background: none; cursor: pointer; border-radius: 999px; padding: 4px 9px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); }
+.dd-seg button[aria-pressed="true"] { background: var(--pane-solid); color: var(--ink); box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim); }
+.dd-empty-note { margin: 18px 6px; font-size: 12.5px; color: var(--mute); text-align: center; line-height: 1.6; }
+.dd-empty-note b { color: var(--ink); font-weight: 600; }
+
+/* ---------- the watchlist ---------- */
+.dd-wl__pills { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 8px; }
+.dd-wl__pill { appearance: none; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line); border-radius: 999px; background: none; padding: 4px 9px;
+  font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); }
+.dd-wl__pill b { color: var(--ink); font-weight: 600; }
+.dd-wl__pill.is-zero { opacity: .45; }
+.dd-wl__pill[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+.dd-wl__pill i, .dd-wl__grp i { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; border: 1px solid var(--hair); }
+.dd-wl__grp { display: flex; align-items: center; gap: 7px; margin: 10px 6px 6px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute); }
+.is-go i, i.is-go { background: var(--wl-go); }
+.is-wait i, i.is-wait { background: var(--wl-wait); }
+.is-under i, i.is-under { background: var(--wl-under); }
+.is-none i, i.is-none { background: transparent; border-style: dashed; }
+.dd-wcard {
+  position: relative; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center;
+  margin: 0 0 6px; padding: 10px 12px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--glass-line); background: var(--pane); background-image: var(--glass-sheen);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim);
+  transition: transform .18s, box-shadow .18s;
+}
+.dd-wcard:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-soft); }
+.dd-wcard.is-here { border-color: var(--ink); }
+.dd-wcard__sym { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; }
+.dd-wcard__tk { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-wcard__sym .mono { margin-left: 6px; font-size: 8.5px; }
+.dd-wcard .dd-wcard__logo { width: 26px; height: 26px; }
+.dd-wcard__score { font-family: var(--mono); font-size: 13px; font-weight: 600; text-align: right; }
+.dd-wcard__score small { font-size: 9px; color: var(--mute); font-weight: 400; margin-left: 4px; }
+.dd-wcard__sig { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; margin-top: 4px; padding: 6px 8px; border-radius: 9px; font-size: 12px; color: var(--ink); }
+.dd-wcard__sig.is-go { background: var(--wl-go); }
+.dd-wcard__sig.is-wait { background: var(--wl-wait); }
+.dd-wcard__sig.is-under { background: var(--wl-under); }
+.dd-wcard__sig.is-none { background: var(--hover-bg); color: var(--mute); }
+.dd-wcard__sig b { font-weight: 600; }
+.dd-wcard__sig span { margin-left: auto; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.04em; white-space: nowrap; }
+.dd-wcard__meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; color: var(--mute); }
+.dd-wcard__meta b { color: var(--ink); font-weight: 500; }
+.dd-wcard__x { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--faint); cursor: pointer; font-size: 11px; line-height: 20px; opacity: 0; transition: opacity .15s; }
+.dd-wcard:hover .dd-wcard__x, .dd-wcard__x:focus-visible { opacity: 1; }
+.dd-wcard:hover .dd-wcard__score { visibility: hidden; }
+.dd-wcard__x:hover { color: var(--ink); background: var(--hover-bg); }
+.dd-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border: 1px solid var(--ink); border-radius: 999px;
+  font-family: var(--mono); font-size: 7.5px; letter-spacing: 0.12em; text-transform: uppercase; vertical-align: 2px; color: var(--ink); }
+
+/* ---------- the wallet ---------- */
+.dd-wal__addr { margin: 0 6px 8px; font-family: var(--mono); font-size: 10px; color: var(--mute); word-break: break-all; }
+.dd-wal__tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 6px 10px; }
+.dd-wal__tags span { border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); }
+.dd-wal__stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0 0 10px; }
+.dd-wal__stat { padding: 9px 11px; border-radius: 12px; border: 1px solid var(--glass-line); background: var(--pane); background-image: var(--glass-sheen);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim); min-width: 0; }
+.dd-wal__stat .k { display: block; font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute); }
+.dd-wal__stat .v { display: block; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.dd-wal__stat .v.is-dim { color: var(--mute); }
+.dd-wal__stat .s { display: block; font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.06em; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-wal__chains { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
+.dd-wal__chains button, .dd-wal__chains span {
+  appearance: none; border: 1px solid var(--line); border-radius: 999px; background: none; padding: 4px 9px; cursor: pointer;
+  font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute);
+}
+.dd-wal__chains b { color: var(--ink); font-weight: 600; margin-right: 5px; }
+.dd-wal__chains button[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+.dd-wal__chains span { cursor: default; opacity: .55; }
+.dd-wal__chains span.is-failed { opacity: 1; border-style: dashed; border-color: var(--ink); color: var(--ink); }
+.dd-wrow {
+  display: grid; grid-template-columns: 28px 1fr auto; gap: 2px 10px; align-items: center; width: 100%;
+  padding: 8px 8px; border: 0; border-radius: 12px; background: none; text-align: left; cursor: pointer; color: var(--ink);
+}
+.dd-wrow:hover { background: var(--hover-bg); }
+.dd-wrow:active { transform: scale(.985); }
+.dd-wrow.is-menu { background: var(--hover-bg); }
+.dd-wrow.is-picked { background: var(--hover-bg); box-shadow: inset 2px 0 0 var(--ink); }
+.dd-wrow__mark { grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background: var(--hover-bg); font-family: var(--mono); font-size: 9px; color: var(--mute); }
+.dd-wrow__mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dd-wrow__sym { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-wrow__sym .mono { margin-left: 6px; font-size: 8px; }
+.dd-wrow__val { font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.dd-wrow__sub { font-family: var(--mono); font-size: 9px; letter-spacing: 0.04em; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-wrow__pnl { font-family: var(--mono); font-size: 9.5px; text-align: right; color: var(--ink); }
+.dd-wrow__pnl.is-down { color: var(--mute); }
+.dd-wrow__bar { grid-column: 2 / -1; height: 2px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.dd-wrow__bar i { display: block; height: 100%; background: var(--ink); opacity: .55; width: 0; }
+.dd-wal__facts { margin: 10px 6px 0; padding-top: 8px; border-top: 1px solid var(--line); display: grid; gap: 4px; }
+.dd-wal__facts div { display: flex; justify-content: space-between; gap: 10px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; color: var(--mute); }
+.dd-wal__facts b { color: var(--ink); font-weight: 500; text-align: right; }
+.dd-wal__facts .is-loud, .dd-wal__facts .is-loud b { color: var(--ink); font-weight: 600; }
+.dd-wal__more { display: block; margin: 12px 6px 4px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); }
+.dd-wal__more a { color: var(--ink); }
+/* A loading wallet: the four phases the scan really goes through. */
+.dd-wal__load { margin: 24px 6px; display: grid; gap: 8px; }
+.dd-wal__load span { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+.dd-wal__load span.is-on { color: var(--ink); }
+.dd-wal__load span.is-done { color: var(--mute); }
+
+/* An open wallet on the empty field: the search and the note centre in
+   the room the pane leaves, not under it. */
+@media (min-width: 641px) {
+  .dd.has-wal:not(.has-run) .dd-search { left: calc(50% + 232px); width: min(560px, calc(100% - 488px)); }
+  .dd.has-wal[data-state="idle"] .dd-empty,
+  .dd.has-wal[data-state="error"] .dd-empty { left: calc(50% + 232px); width: min(560px, calc(100% - 488px)); }
+}
+/* ---------- entrances ----------
+   A pane arrives rather than appears: a short rise and fade, on transform
+   and opacity only, so it never costs a layout. It plays whenever the
+   element leaves `hidden`, which is every time it opens. */
+@keyframes dd-rise { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes dd-fade { from { opacity: 0; } to { opacity: 1; } }
+.dd-pane:not([hidden]), .dd-chart:not([hidden]):not([data-size="max"]), .dd-search__rows:not([hidden]), .dd-links:not([hidden]) {
+  animation: dd-rise .22s cubic-bezier(.2, .8, .2, 1) backwards;
+}
+.dd-chart[data-size="max"]:not([hidden]), .dd-sec:not([hidden]), .dd-chart-chip:not([hidden]) { animation: dd-fade .18s ease-out backwards; }
+/* `backwards`, never `both`: a finished entrance must leave no transform
+   behind, or it would outrank the one a drag writes. */
+@media (prefers-reduced-motion: reduce) {
+  .dd-pane, .dd-chart, .dd-search__rows, .dd-sec, .dd-chart-chip, .dd-links { animation: none !important; }
+}
+
+/* ---------- panes the viewer moves ----------
+   A title bar is a handle on a pointer screen. While a pane is carried it
+   lifts a little and nothing eases, so it follows the hand exactly. */
+@media (min-width: 641px) {
+  .dd-chart:not([data-size="max"]) .dd-chart__hd, .dd-pane__hd { cursor: grab; touch-action: none; }
+  .dd-chart__hd .dd-chip, .dd-pane__hd .dd-chip, .dd-pane__hd .dd-seg { cursor: pointer; }
+}
+.is-dragging { transition: none !important; user-select: none; -webkit-user-select: none; will-change: transform;
+  /* Carried, the pane re-filters a new patch of field every frame; a
+     lighter frost for the length of the gesture keeps it under the hand. */
+  -webkit-backdrop-filter: blur(10px) !important; backdrop-filter: blur(10px) !important; }
+.is-dragging .dd-chart__hd, .is-dragging .dd-pane__hd { cursor: grabbing; }
+.dd-chart.is-dragging, .dd-pane.is-dragging {
+  box-shadow: inset 0 1px 0 var(--glass-inner), inset 0 -1px 0 var(--glass-rim), 0 0 0 1px var(--glass-rim), var(--shadow-lift), 0 40px 90px -40px rgba(10, 10, 10, 0.45);
+}
+/* A placed watchlist keeps its height cap but loses the dock's share of it. */
+.dd-wl.is-placed { max-height: calc(100% - var(--dd-top) - 18px); }
+
+@media (max-width: 640px) {
+  .dd-pane, .dd-wal, .dd-wl {
+    left: 0; right: 0; width: auto; top: auto; bottom: 0; max-height: 72vh; height: 72vh;
+    border-radius: 20px 20px 0 0; border-bottom: 0; z-index: 12;
+  }
+  .dd-trail, .dd-sec { height: 28px; padding: 0 10px; }
+  /* Five chips do not fit beside the trail on a phone: the star keeps its
+     glyph, the trade chip (not live yet) steps out, the trail gives way. */
+  .dd-chip__t, #tradeChip { display: none; }
+  .dd-tl { max-width: calc(100% - 200px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dd-wcard { transition: none; }
+}
+
+/* ---------- the welcome ----------
+   The field before a token: a greeting with the state of the viewer's book,
+   the search under it, then shelves of glass cards (recent tokens, the
+   watchlist, what the bot's groups called most). Monochrome: emphasis by
+   weight and opacity; the only tints are the watchlist's verdict washes,
+   reused as the panel uses them. The token logos are the tokens' own.
+   Since 0.26.0 the search lives in the band on the home too, and the home
+   is one screen that never scrolls: the trending strip, the stage (taking
+   whatever height is left) and the viewer's two strips. */
+.dd-home {
+  position: absolute; left: 50%; transform: translateX(-50%); z-index: 4;
+  top: calc(var(--dd-top) + 14px); bottom: 30px; width: min(1180px, calc(100% - 32px));
+  display: flex; flex-direction: column; gap: 10px; min-height: 0;
+}
+
+/* ---------- the strips (0.26.0) ----------
+   Trending over the stage, watching and opened lately under it: one design,
+   a label in a shared column, then a row of glass capsules the mouse wheel
+   runs sideways. */
+.dd-strip { flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; min-width: 0; }
+.dd-strip__k { margin: 0; text-align: center; white-space: nowrap; font-size: 8.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--mute); }
+.dd-strip__k button { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.dd-strip__k button:hover, .dd-strip__k button:focus-visible { color: var(--ink); }
+.dd-strip__row { display: flex; align-items: center; gap: 8px; min-height: 56px; box-sizing: border-box; padding: 3px 2px 5px;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+/* a row that fits sits centred (the auto margins fall to 0 once it overflows,
+   so a long row still starts at its first capsule); one that runs on fades
+   where it is cut */
+.dd-strip__row > :first-child { margin-left: auto; }
+.dd-strip__row > :last-child { margin-right: auto; }
+.dd-strip__row.is-over {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); }
+.dd-strip__row::-webkit-scrollbar { display: none; }
+/* scrolled (or a carousel), a strip fades at both ends */
+.dd-strip__row.is-over.is-in, .dd-strip__row[data-loop] {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 44px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 44px), transparent); }
+
+.dd-strip__sep { flex: 0 0 auto; padding: 0 2px; white-space: nowrap; font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+.dd-yc + .dd-strip__sep, .dd-yc--ghost + .dd-strip__sep { margin-left: 12px; }
+.dd-strip__hint { flex: 0 0 auto; margin: 0; padding: 11px 18px; border-radius: 999px; border: 1px dashed var(--hair); white-space: nowrap; font-size: 12px; color: var(--mute); }
+.dd-strip__hint kbd { font-family: var(--mono); font-size: 10px; padding: 1px 6px; margin: 0 1px; border: 1px solid var(--hair); border-radius: 5px; color: var(--ink); }
+.dd-strip__more { flex: 0 0 auto; height: 34px; padding: 0 12px; border-radius: 999px; cursor: pointer; background: none;
+  border: 1px dashed var(--hair); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); }
+.dd-strip__more[data-clear] { border-color: transparent; }
+.dd-strip__more:hover, .dd-strip__more:focus-visible { color: var(--ink); }
+
+/* ---------- the stage (0.25.0) ----------
+   One glass frame for the board: the garden or the board as cards, never
+   both, switched by the one pill at its foot. It is in the page from the
+   first paint (a breathing grid until the read lands, then the bubbles rise
+   into it), so nothing around it ever moves. */
+.dd-hs { position: relative; flex: 1 1 auto; min-height: 200px; border-radius: 24px; overflow: hidden;
+  background: color-mix(in srgb, var(--pane-solid) 52%, transparent); background-image: var(--glass-sheen);
+  border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-soft); }
+.dd-hs__field { position: absolute; inset: 0; transition: opacity .45s ease, transform .6s cubic-bezier(.22, .8, .2, 1), filter .45s ease; }
+.dd-hs[data-view="cards"] .dd-hs__field { opacity: 0; transform: scale(1.05); filter: blur(6px); pointer-events: none; }
+.dd-hs__wait { position: absolute; inset: 0; margin: 0; padding-bottom: 48px; display: grid; place-items: center; pointer-events: none; transition: opacity .7s ease;
+  background-image: radial-gradient(circle, var(--hair) 1.1px, transparent 1.6px); background-size: 26px 26px; background-position: 13px 13px; }
+/* the holder map's loader, a size down to sit on the stage over the pill */
+.dd-hs__wait .hm-loader__c { gap: 10px; }
+.dd-hs__wait .hm-loader__mark { width: 70px; height: 89px; }
+.dd-hs__wait .hm-loader__lbl { max-width: calc(100% - 48px); text-align: center; line-height: 1.6; }
+.dd-hs__wait.is-err .hm-loader__pct { display: none; }
+.dd-hs__wait.is-err .hm-loader__c { animation: none; }
+.dd-hs.is-ready .dd-hs__wait { opacity: 0; }
+.dd-hs__zoom { position: absolute; left: 18px; top: 15px; font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mute); pointer-events: none; }
+.dd-hs__zoom[hidden] { display: none; }
+.dd-hs__cards { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 4px 18px 88px;
+  opacity: 0; pointer-events: none; transition: opacity .35s ease; }
+.dd-hs[data-view="cards"] .dd-hs__cards { opacity: 1; pointer-events: auto; }
+.dd-hs.is-fly[data-view="cards"] .dd-hs__cards .dd-hc { animation: dd-hs-fly .55s cubic-bezier(.22, .9, .25, 1.15) both; animation-delay: calc(var(--i, 0) * 40ms); }
+@keyframes dd-hs-fly { from { opacity: 0; transform: translateY(24px) scale(.6); border-radius: 50%; } }
+/* the pill: what the stage shows, how it is filtered, back to the whole field, the key */
+.dd-hs__pill { position: absolute; z-index: 4; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px;
+  max-width: calc(100% - 20px); padding: 5px; border-radius: 999px; box-sizing: border-box;
+  background: var(--pane-solid); background-image: var(--glass-sheen); border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-soft); }
+.dd-hs__pill > * { flex: 0 0 auto; }
+.dd-hs__pill .dd-seg button { padding: 9px 14px; }
+.dd-hs__pill .dd-seg button:disabled { opacity: .35; cursor: default; }
+.dd-hs__pill .dd-chip { min-height: 34px; padding: 8px 13px; }
+.dd-hs__pill .dd-chip .num { margin-left: 5px; opacity: .7; }
+.dd-hs__pop { position: absolute; z-index: 5; left: 50%; bottom: 70px; transform: translateX(-50%); width: min(600px, calc(100% - 24px)); box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 18px;
+  background: var(--pane-solid); background-image: var(--glass-sheen); border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-soft); animation: dd-hs-pop .2s ease; }
+.dd-hs__pop[hidden] { display: none; }
+@keyframes dd-hs-pop { from { opacity: 0; transform: translate(-50%, 6px); } }
+.dd-hs__key { align-items: center; gap: 6px; text-align: center; font-size: 9px; line-height: 1.7; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); }
+.dd-hs__pop .dd-chains { margin: 0; }
+
+/* ---------- the capsule (0.25.0, every strip since 0.26.0) ----------
+   A token on one line: rank (trending), logo, ticker over why it is here,
+   price over its move. */
+.dd-yc { position: relative; flex: 0 0 auto; display: flex; align-items: center; gap: 10px; height: 50px; box-sizing: border-box; padding: 0 16px 0 8px;
+  border-radius: 999px; cursor: pointer; scroll-snap-align: start; color: var(--ink);
+  background: var(--pane); background-image: var(--glass-sheen); border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim); transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.dd-yc:hover, .dd-yc:focus-visible { transform: translateY(-2px); border-color: var(--hair); outline: none;
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-soft); }
+.dd-yc.is-watch { border-color: color-mix(in srgb, var(--ink) 20%, var(--glass-line)); }
+.dd-yc .dd-hc__logo { width: 34px; height: 34px; }
+.dd-yc__id { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.dd-yc__id b { font-size: 13.5px; font-weight: 650; letter-spacing: -0.015em; white-space: nowrap; }
+.dd-yc__s { display: flex; align-items: center; gap: 5px; font-size: 9px; letter-spacing: 0.06em; color: var(--mute); white-space: nowrap; }
+.dd-yc__mark { flex: 0 0 auto; width: 7px; height: 7px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ink); }
+.dd-yc__mark.is-go { background: var(--ink); }
+.dd-yc__mark.is-wait { border-style: dotted; }
+.dd-yc__mark.is-under, .dd-yc__mark.is-none { border-color: var(--faint); }
+.dd-yc__v { display: flex; flex-direction: column; align-items: flex-end; padding-left: 4px; font-size: 12px; font-weight: 600; line-height: 1.25; }
+.dd-yc__v:empty { display: none; }
+.dd-yc__v .dd-ch { font-size: 9.5px; }
+.dd-yc__x { position: absolute; top: -5px; right: -3px; width: 20px; height: 20px; padding: 0; border-radius: 50%; cursor: pointer; opacity: 0; transition: opacity .15s;
+  border: 1px solid var(--glass-line); background: var(--pane-solid); color: var(--mute); font-size: 9px; line-height: 1; }
+.dd-yc:hover .dd-yc__x, .dd-yc:focus-within .dd-yc__x { opacity: 1; }
+.dd-yc__rank { flex: 0 0 auto; min-width: 12px; margin-right: -3px; text-align: center; font-size: 11px; font-weight: 600; color: var(--faint); }
+.dd-yc__v .dd-ch i { font-style: normal; font-weight: 400; opacity: .6; }
+.dd-yc--ghost { width: 196px; cursor: default; animation: dd-breathe 1.6s ease-in-out infinite; }
+
+/* The trending row stays quiet (decided 2026-10-12): the home's highlights
+   are the field, read with our own filters; running hot and the groups'
+   calls are a slim ticker above it. One line per token, no glass, faded
+   until a pointer or the keyboard reaches it. Watching and recent keep the
+   full capsules. */
+#homeTrend .dd-strip__row { min-height: 30px; gap: 2px; padding: 2px 2px 3px; }
+/* the slim pill: logo, ticker, one move -- the rest is in its tooltip */
+.dd-yc--slim { height: 24px; gap: 5px; padding: 0 9px 0 3px; opacity: .6;
+  background: none; background-image: none; border-color: transparent; box-shadow: none;
+  transition: opacity .2s ease, border-color .2s ease; }
+.dd-yc--slim:hover, .dd-yc--slim:focus-visible { opacity: 1; transform: none; border-color: var(--hair); box-shadow: none; }
+.dd-yc--slim .dd-hc__logo { width: 16px; height: 16px; }
+.dd-yc--slim .dd-hc__logo b { font-size: 7.5px; }
+.dd-yc__t { font-size: 11px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+.dd-yc--slim .dd-ch { font-size: 10px; font-weight: 500; }
+#homeTrend .dd-yc--ghost { width: 96px; height: 24px; }
+#homeTrend .dd-strip__sep { font-size: 7.5px; }
+#homeTrend .dd-yc--slim + .dd-strip__sep, #homeTrend .dd-yc--ghost + .dd-strip__sep { margin-left: 8px; }
+
+/* the chain filter: every chain DiDo reads, the hidden ones unpressed;
+   "evm" is pressed, mixed or off as its chains are */
+.dd-chains { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 4px 4px 0; }
+.dd-chains__k { margin-right: 4px; font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+.dd-chains__evm { display: contents; }
+.dd-chains .dd-chip { padding: 5px 9px; font-size: 9px; }
+.dd-chains [data-chains="evm"] { margin-left: 8px; }
+.dd-chains .dd-chip[aria-pressed="mixed"] { color: var(--ink); border-color: var(--ink); }
+.dd-chains__n { margin-left: 6px; font-size: 9px; letter-spacing: 0.08em; color: var(--mute); }
+
+.dd-shelf { margin: 14px 0 0; }
+/* The entrance plays once per arrival (.is-enter, set by HOME.sync for
+   ~0.9 s), never on the re-renders a price refresh causes. */
+.dd-home.is-enter > *, .dd-home.is-enter .dd-shelf { animation: dd-home-in .55s cubic-bezier(.2, .8, .2, 1) both; }
+.dd-home.is-enter > :nth-child(2) { animation-delay: .06s; }
+.dd-home.is-enter > :nth-child(3) { animation-delay: .12s; }
+.dd-home.is-enter > :nth-child(4) { animation-delay: .18s; }
+.dd-home.is-enter .dd-shelf:nth-child(1) { animation-delay: .1s; }
+.dd-home.is-enter .dd-shelf:nth-child(2) { animation-delay: .16s; }
+.dd-home.is-enter .dd-shelf:nth-child(3) { animation-delay: .22s; }
+.dd-home.is-enter .dd-shelf:nth-child(4) { animation-delay: .28s; }
+.dd-shelf__hd { display: flex; align-items: baseline; gap: 12px; margin: 0 4px 10px; }
+.dd-shelf__hd h2 { margin: 0; font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); }
+.dd-shelf__n { font-size: 9px; letter-spacing: 0.08em; color: var(--mute); }
+.dd-shelf__n b { color: var(--ink); font-weight: 600; }
+.dd-shelf__hd .dd-link { margin-left: auto; }
+.dd-shelf__row { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 10px; }
+.dd-shelf__note { grid-column: 1 / -1; margin: 0; padding: 16px 18px; border-radius: 16px; border: 1px dashed var(--hair); font-size: 12px; color: var(--mute); }
+
+/* a card: logo · $TICKER over its name, the corner (chain, score or rank),
+   the price with its 24h move, the shelf's own line, a mono footer */
+.dd-hc {
+  position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 132px;
+  padding: 13px 14px 12px; border-radius: 18px; cursor: pointer; text-align: left; color: var(--ink);
+  border: 1px solid var(--glass-line); background: var(--pane); background-image: var(--glass-sheen);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s ease, border-color .2s ease;
+  outline: none;
+}
+.dd-hc:hover, .dd-hc:focus-visible { transform: translateY(-2px); box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-lift); }
+.dd-hc:focus-visible { border-color: var(--ink); }
+.dd-hc.is-here { border-color: var(--ink); }
+.dd-hc__hd { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.dd-hc__logo { position: relative; flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: var(--hover-bg); box-shadow: inset 0 0 0 1px var(--hair); }
+.dd-hc__logo b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; font-style: normal; color: var(--mute); }
+.dd-hc__logo img { position: relative; width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .4s ease; }
+.dd-hc__logo.is-in img { opacity: 1; }
+.dd-hc__id { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.dd-hc__sym { font-size: 14px; font-weight: 650; letter-spacing: -0.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-hc__nm { font-size: 10.5px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-hc__ch { flex: 0 0 auto; align-self: flex-start; font-size: 8px; letter-spacing: 0.12em; color: var(--mute); padding: 2px 6px; border: 1px solid var(--line); border-radius: 999px; }
+.dd-hc__score { flex: 0 0 auto; align-self: flex-start; font-family: var(--mono); font-size: 15px; font-weight: 600; }
+.dd-hc__rank { flex: 0 0 auto; align-self: flex-start; font-family: var(--mono); font-size: 22px; font-weight: 600; line-height: 1; color: var(--faint); letter-spacing: -0.04em; }
+.dd-hc--trend:nth-child(-n+3) .dd-hc__rank { color: var(--ink); }
+.dd-hc__px { display: flex; align-items: baseline; gap: 8px; font-family: var(--mono); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.dd-hc__px .dd-ch { font-size: 10px; font-weight: 500; }
+.dd-hc__px .dd-ch i { font-style: normal; color: var(--faint); font-size: 8.5px; }
+.dd-hc__na { font-size: 11px; font-weight: 400; color: var(--faint); }
+.dd-hc__ft { margin-top: auto; font-size: 8.5px; letter-spacing: 0.06em; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-hc__ft b { color: var(--ink); font-weight: 600; }
+.dd-hc__sig { display: flex; align-items: baseline; gap: 6px; padding: 5px 8px; border-radius: 9px; font-size: 11px; min-width: 0; }
+.dd-hc__sig i { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--hair); align-self: center; }
+.dd-hc__sig b { font-weight: 600; white-space: nowrap; }
+.dd-hc__sig span { margin-left: auto; font-family: var(--mono); font-size: 8.5px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-hc__sig.is-go { background: var(--wl-go); }
+.dd-hc__sig.is-wait { background: var(--wl-wait); }
+.dd-hc__sig.is-under { background: var(--wl-under); }
+.dd-hc__sig.is-none { background: var(--hover-bg); color: var(--mute); }
+.dd-hc__sig.is-go span, .dd-hc__sig.is-wait span, .dd-hc__sig.is-under span { color: var(--ink); opacity: .7; }
+/* how many groups called it, against the board's top: a hairline filled in ink */
+.dd-hc__heat { position: relative; display: flex; align-items: baseline; gap: 5px; padding-top: 7px; font-size: 10.5px; color: var(--mute); }
+.dd-hc__heat b { color: var(--ink); font-size: 13px; }
+.dd-hc__since { margin-left: auto; font-size: 9.5px; color: var(--mute); white-space: nowrap; }
+.dd-hc__since b { font-family: var(--mono); font-size: 11px; font-weight: 600; }
+.dd-hc__heat::before, .dd-hc__heat i { content: ''; position: absolute; left: 0; top: 0; height: 2px; border-radius: 2px; }
+.dd-hc__heat::before { right: 0; background: var(--line); }
+.dd-hc__heat i { width: calc(var(--heat, .1) * 100%); background: var(--ink); opacity: .55; transform-origin: left; }
+.dd-home.is-enter .dd-hc__heat i { animation: dd-grow .8s .3s cubic-bezier(.2, .8, .2, 1) both; }
+/* the entry board's one new idea on a card: the entry band (filled), the
+   sell level (dashed) and the price (a dot; hollow once it slipped under the
+   zone), on one log-scaled line. Positions arrive as --e0 --e1 --t0 --t1 --px
+   (percent), set from data-rb after render: the CSP drops inline styles. */
+.dd-rbar { position: relative; display: block; height: 14px; margin: 1px 2px 0; }
+.dd-rbar::before { content: ''; position: absolute; left: 0; right: 0; top: 6px; height: 1px; background: var(--line); }
+.dd-rbar i { position: absolute; top: 2px; height: 9px; }
+.dd-rbar__e { left: calc(var(--e0, 0) * 1%); width: max(3px, calc((var(--e1, 0) - var(--e0, 0)) * 1%)); border-radius: 3px; background: var(--ink); opacity: .22; }
+.dd-rbar__t { left: calc(var(--t0, 0) * 1%); width: calc((var(--t1, 0) - var(--t0, 0)) * 1%); min-width: 6px; border-radius: 3px; border: 1px dashed var(--faint); box-sizing: border-box; }
+.dd-rbar__p { left: calc(var(--px, 0) * 1%); width: 9px; margin-left: -4.5px; border-radius: 50%; background: var(--ink); }
+.dd-rbar.is-out .dd-rbar__p { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink); }
+/* the entry board when nothing qualifies: a glass card that shows the work */
+.dd-board-empty { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border-radius: 18px;
+  border: 1px solid var(--glass-line); background: var(--pane); background-image: var(--glass-sheen);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim); }
+.dd-board-empty b { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.dd-board-empty span { font-size: 9.5px; letter-spacing: 0.08em; color: var(--mute); }
+.dd-hc__x { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--pane-solid); color: var(--mute); cursor: pointer; font-size: 10px; line-height: 22px; opacity: 0; transition: opacity .15s; }
+.dd-hc:hover .dd-hc__x, .dd-hc__x:focus-visible { opacity: 1; }
+.dd-hc__x:hover { color: var(--ink); }
+.dd-hc--more { align-items: flex-start; justify-content: center; gap: 2px; font: inherit; }
+.dd-hc--more b { font-family: var(--mono); font-size: 22px; font-weight: 600; }
+.dd-hc--more span { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); }
+.dd-hc--ghost { cursor: default; animation: dd-breathe 1.6s ease-in-out infinite; }
+.dd-hc--ghost:nth-child(2) { animation-delay: .15s; }
+.dd-hc--ghost:nth-child(3) { animation-delay: .3s; }
+.dd-hc--ghost:nth-child(4) { animation-delay: .45s; }
+.dd-hc--ghost:hover { transform: none; box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim); }
+
+/* first visit: what DiDo is, in three cards with their key */
+.dd-tip { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 18px; border: 1px dashed var(--hair); }
+.dd-tip__k { align-self: flex-start; min-width: 22px; padding: 2px 7px; border: 1px solid var(--hair); border-radius: 6px; font-size: 10px; text-align: center; color: var(--ink); }
+.dd-tip b { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+.dd-tip span:last-child { font-size: 11.5px; line-height: 1.5; color: var(--mute); }
+
+/* the search's rows over a token, when it opens empty: recent tokens */
+.dd-row--hd { padding: 6px 12px 2px; font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+
+@keyframes dd-home-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes dd-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes dd-breathe { 0%, 100% { opacity: .35; } 50% { opacity: .7; } }
+
+@media (max-width: 640px) {
+  .dd-home { width: auto; left: 0; right: 0; transform: none; top: calc(var(--dd-top) + 10px); bottom: 26px; gap: 8px; }
+  /* the search in the band leaves the mark and the chips their room */
+  .dd.has-home[data-state] .dd-search, .dd.has-home[data-state] .dd-search:focus-within { width: auto; left: 92px; }
+  /* the globe in the corner under the welcome, the version line just above */
+  .dd.has-home .dd-home { bottom: 60px; }
+  .dd.has-home .dd-ft { bottom: 46px; }
+  .dd.has-home .dd-soc { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+
+  .dd-strip__row { padding-left: 12px; padding-right: 12px; min-height: 54px; }
+  .dd-strip__hint { flex: 1 1 auto; white-space: normal; border-radius: 16px; padding: 9px 14px; font-size: 11.5px; line-height: 1.45; text-align: center; }
+  .dd.has-home .dd-trail { display: none; }
+  .dd-shelf__hd { margin: 0 16px 8px; }
+  .dd-hs { margin: 0 12px; border-radius: 20px; min-height: 240px; }
+  .dd-hs__cards { padding: 4px 0 88px; }
+  .dd-hs__pill .dd-seg button { padding: 9px 12px; }
+  .dd-hs__pill .dd-chip { padding: 8px 11px; }
+  /* phones: each shelf is a row the thumb swipes */
+  .dd-shelf__row { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 2px 16px 6px; scroll-padding: 0 16px; }
+  .dd-shelf__row::-webkit-scrollbar { display: none; }
+  .dd-shelf__row > * { flex: 0 0 72vw; max-width: 260px; scroll-snap-align: start; }
+  .dd-shelf__row > .dd-shelf__note { flex-basis: 100%; max-width: none; }
+  .dd-hc__x { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dd-home > *, .dd-shelf, .dd-hc__heat i, .dd-hc--ghost, .dd-yc--ghost, .dd-hs__wait, .dd-hs__pop { animation: none; }
+  .dd-hc, .dd-yc, .dd-hs__field { transition: none; }
+  .dd-hs.is-fly[data-view="cards"] .dd-hs__cards .dd-hc { animation: none; }
+}
+
+/* ---------- the garden (DIDO_HOME_PLAN.md phase 3) ----------
+   Every token the entry board read, drawn in the stage's field (0.25.0;
+   before, a canvas under the whole welcome with the shelves rising over it
+   in a sheet). */
+.dd-garden { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; height: 100%; }
+.dd-garden[hidden] { display: none; }
+.dd-hero__modes { display: flex; gap: 6px; flex-wrap: wrap; }
+.dd-hero__modes .dd-chip span { margin-left: 4px; opacity: .6; font-family: var(--mono); font-size: 9.5px; }
+.dd-hc.is-twin { border-color: var(--ink); transform: translateY(-2px); }
+.dd-gpeek { position: fixed; z-index: 6; width: 250px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; pointer-events: none;
+  border: 1px solid var(--glass-line); background: var(--pane-solid); background-image: var(--glass-sheen);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-lift); font-size: 12px; }
+.dd-gpeek[hidden] { display: none; }
+.dd-gpeek.is-menu { pointer-events: auto; }
+.dd-gpeek__acts { display: flex; gap: 6px; margin-top: 4px; }
+.dd-gpeek__acts .dd-chip { flex: 1 1 0; text-align: center; padding: 9px 10px; }
+.dd-gpeek__sym { font-size: 16px; font-weight: 650; letter-spacing: -0.015em; }
+.dd-gpeek__sub, .dd-gpeek__row, .dd-gpeek__hint { font-size: 9.5px; letter-spacing: 0.06em; color: var(--mute); }
+.dd-gpeek__hint { color: var(--faint); text-transform: uppercase; letter-spacing: 0.12em; font-size: 8.5px; }
+.dd-gpeek__why { color: var(--mute); line-height: 1.45; }
+.dd-gpeek__why b { color: var(--ink); font-weight: 600; }
+@media (max-width: 640px) {
+  .dd-gpeek { width: 220px; }
+}
+
+/* ---------- the wallet deep dive ----------
+   A wallet's holdings are drawn in the holder map's glass, one liquid body
+   per chain (WGROUND): a section of the wallet pane by default, and over
+   the whole field when its corner chip is pressed (the token's map steps
+   back). Monochrome like the map: the only colour is each token's own
+   artwork inside its marble. */
+/* the section: the wallet's bubbles inside the pane, under the totals */
+.dd-wal__bubbles { position: relative; height: 252px; margin: 0 0 10px; border-radius: 16px; overflow: hidden;
+  border: 1px solid var(--glass-line); background: var(--pane); background-image: var(--glass-sheen);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim); }
+.dd-wal__bubbles .dd-wg-svg { transition: opacity .3s; }
+.dd-wal__bubbles .dd-wg-hubval { font-size: 14px; }
+.dd-wal__bubbles .dd-wg-tick { font-size: 8.5px; }
+.dd-wal__bubbles .dd-wg-plate text { font-size: 9px; }
+.dd-wal__bubbles-read { position: absolute; left: 10px; right: 10px; bottom: 8px; margin: 0; font-size: 9px; letter-spacing: .06em; color: var(--mute);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; transition: opacity .3s; }
+.dd-wal__bubbles-read b { color: var(--ink); font-weight: 600; }
+/* the corner chip: opens the bubbles over the whole field, and closes them */
+.dd-wal .dd-wal__full { position: absolute; top: 8px; right: 8px; z-index: 2; display: inline-flex; align-items: center; gap: 6px; color: var(--ink);
+  background: var(--pane-solid); background-image: var(--glass-sheen); border-color: var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), 0 8px 20px -12px rgba(0, 0, 0, 0.5);
+  transition: transform .18s cubic-bezier(.22,1.3,.36,1), box-shadow .18s; }
+.dd-wal .dd-wal__full span { font-size: 12px; line-height: 1; letter-spacing: 0; }
+.dd-wal .dd-wal__full:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--ink), 0 12px 24px -12px rgba(0, 0, 0, 0.6); }
+.dd-wal .dd-wal__full:active { transform: scale(.96); }
+/* while the full view is up, the section rests: the field shows the same bubbles */
+.dd.has-wground .dd-wal__bubbles .dd-wg-svg, .dd.has-wground .dd-wal__bubbles-read { opacity: .3; }
+
+/* the ground: the token's map and its chrome step back while it is up */
+.dd #stage { transition: opacity .45s ease, filter .45s ease; }
+.dd.has-wground #stage { opacity: .12; filter: blur(6px) saturate(.7); pointer-events: none; }
+.dd.has-wground .dd-chart, .dd.has-wground .dd-chart-chip, .dd.has-wground .dd-railfold, .dd.has-wground .dd-railcard,
+.dd.has-wground .dd-mapstate, .dd.has-wground .dd-home, .dd.has-wground .dd-garden, .dd.has-wground .dd-empty {
+  opacity: 0 !important; pointer-events: none !important; transition: opacity .3s; }
+.dd.has-wground .dd-sec, .dd.has-wground .dd-ticker, .dd.has-wground .dd-trail { opacity: .35; transition: opacity .3s; }
+.dd-wground { position: absolute; z-index: 6; display: flex; flex-direction: column; pointer-events: none; }
+.dd-wground[hidden] { display: none; }
+.dd-wground > * { pointer-events: auto; }
+.dd-wground__hd { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 0 0 4px; }
+.dd-wground__cap { min-width: 0; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-wground__cap b { color: var(--ink); font-weight: 600; }
+.dd-wground__body { position: relative; flex: 1 1 auto; min-height: 0; }
+.dd-wg-svg { position: absolute; left: 0; top: 0; display: block; overflow: visible; }
+.dd-wground__read { position: absolute; right: 0; bottom: 0; margin: 0; max-width: min(46%, 520px); pointer-events: none;
+  font-size: 10px; letter-spacing: .06em; color: var(--mute); padding: 6px 14px; border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--pane); background-image: var(--glass-sheen); border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.dd-wground__read b { color: var(--ink); font-weight: 600; }
+/* the marbles: the shared .holder-node, plus what a holding adds */
+.dd-wground .dd-wg-sat, .dd-wal__bubbles .dd-wg-sat { transition: opacity .25s ease; }
+.dd-wground .dd-wg-sat.is-dim, .dd-wground .dd-wg-pool.is-dim, .dd-wground .dd-wg-spoke.is-dim, .dd-wground .dd-wg-plate.is-dim,
+.dd-wal__bubbles .dd-wg-sat.is-dim, .dd-wal__bubbles .dd-wg-pool.is-dim, .dd-wal__bubbles .dd-wg-spoke.is-dim, .dd-wal__bubbles .dd-wg-plate.is-dim { opacity: .12; }
+.dd-wground .dd-wg-sat.is-picked .holder-node__halo, .dd-wground .dd-wg-sat.is-menu .holder-node__halo,
+.dd-wal__bubbles .dd-wg-sat.is-picked .holder-node__halo, .dd-wal__bubbles .dd-wg-sat.is-menu .holder-node__halo { opacity: 1; }
+.dd-wground .dd-wg-sat.is-picked .holder-node__inner, .dd-wground .dd-wg-sat.is-menu .holder-node__inner,
+.dd-wal__bubbles .dd-wg-sat.is-picked .holder-node__inner, .dd-wal__bubbles .dd-wg-sat.is-menu .holder-node__inner { transform: scale(1.09); }
+.dd-wground .dd-wg-sat:active .holder-node__inner, .dd-wal__bubbles .dd-wg-sat:active .holder-node__inner { transform: scale(.93); transition-duration: .08s; }
+.dd-wg-tick { font-family: var(--mono); font-size: 10px; font-weight: 600; fill: var(--ink); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.dd-wg-tick.is-out { font-weight: 500; fill-opacity: .72; font-size: 9.5px; }
+.dd-wg-tick.is-val { font-weight: 400; fill-opacity: .5; font-size: 9px; }
+.dd-wg-hubname { font-family: var(--mono); font-size: 10px; fill: var(--ink); fill-opacity: .6; text-anchor: middle; }
+.dd-wg-hubval { font-family: var(--sans); font-size: 19px; font-weight: 650; letter-spacing: -.02em; fill: var(--ink); text-anchor: middle; }
+.dd-wg-hubsub { font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; fill: var(--ink); fill-opacity: .45; text-anchor: middle; }
+.dd-wg-hubin { transform-box: fill-box; transform-origin: center; }
+.dd-wg-spoke { stroke: var(--ink); stroke-opacity: .16; stroke-width: 1; transition: opacity .25s; }
+.dd-wg-pool, .dd-wg-plate { transition: opacity .25s; }
+.dd-wg-plate { cursor: pointer; outline: none; }
+.dd-wg-plate rect { fill: var(--card); stroke: var(--ink); stroke-opacity: .4; }
+.dd-wg-plate:hover rect, .dd-wg-plate:focus-visible rect { stroke-opacity: .9; }
+.dd-wg-plate text { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.dd-wg-plate .is-k { font-weight: 600; }
+.dd-wg-plate .is-m { fill-opacity: .55; }
+
+/* a holding's menu: the shared .hm-ctx, placed by the page */
+.dd .dd-hctx { position: fixed; z-index: 40; }
+.dd-hctx .hm-ctx__i[data-hm="token-open"] { font-weight: 600; }
+.dd-hctx .hm-ctx__i[data-hm="token-open"] span, #stage .hm-ctx__i[data-hm="wallet-open"] span { display: inline-block; transition: transform .25s cubic-bezier(.22,1.3,.36,1); }
+.dd-hctx .hm-ctx__i[data-hm="token-open"]:hover span, #stage .hm-ctx__i[data-hm="wallet-open"]:hover span { transform: translateX(3px); color: var(--ink); }
+.dd-hctx__note { margin: 0; padding: 7px 8px; font-family: var(--mono); font-size: 9.5px; color: var(--mute); }
+
+/* the travelling bubble. Drawn to stay crisp in flight and at rest: the
+   logo is clipped by its own rounded corners (a clip on a moving layer
+   loses its smoothing), a logo needs no frosted glass behind it (a rounded
+   backdrop blur draws a rough rim), and the waiting pulse is a ring of its
+   own that only fades, so the logo is never repainted while it waits. */
+.dd-coin { position: fixed; z-index: 45; left: 0; top: 0; width: 112px; height: 112px; border-radius: 50%; pointer-events: none; display: grid; place-items: center; text-align: center;
+  background: radial-gradient(circle at 36% 28%, color-mix(in srgb, var(--ink) 30%, transparent), color-mix(in srgb, var(--ink) 10%, transparent) 60%, color-mix(in srgb, var(--ink) 5%, transparent));
+  border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-soft);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.dd-coin.has-art { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--card); }
+.dd-coin img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.dd-coin::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; background: radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 38%); box-shadow: inset 0 0 0 1px var(--glass-rim); }
+.dd-coin::before { content: ''; position: absolute; inset: -13px; border-radius: 50%; pointer-events: none; border: 12px solid var(--hover-bg); opacity: 0; }
+.dd-coin__t { position: relative; z-index: 1; padding: 0 10px; }
+.dd-coin__t b { display: block; font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--ink); }
+.dd-coin__t small { display: block; margin-top: 4px; font-family: var(--mono); font-size: 7.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--mute); line-height: 1.3; min-height: 2.6em; }
+.dd-coin.has-art .dd-coin__t { display: none; }
+.dd-coin.is-waiting::before { animation: ddCoinWait 1.1s ease-in-out infinite; }
+/* docked in the holder loader: the bubble is the loader's mark, so the
+   mark steps aside (its room kept, the figures stay put) and the loader's
+   own label says the phase */
+.dd-coin.is-docked .dd-coin__t small { display: none; }
+.dd-stage .hm-loader.has-coin .hm-loader__mark { visibility: hidden; }
+@keyframes ddCoinWait { 50% { opacity: 1; } }
+
+/* the trail: every place visited, at the foot of the field. Folded it is
+   the step you are on and the one before, the rest of the way stacked at
+   either end; open (hover, focus, a tap on a stack) it slides out to the
+   free stretch of the foot, with chevrons and fading edges when the way is
+   longer than that. Widths, the track's offset and the pill's place are set
+   from dido.js (TRAIL.fit) through the style object. */
+.dd-journey { --tr-ease: cubic-bezier(.22,.8,.2,1); position: absolute; z-index: 9; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px;
+  max-width: calc(100% - 24px);
+  background: var(--pane); background-image: var(--glass-sheen); border: 1px solid var(--glass-line); box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-soft);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  transition: left .55s var(--tr-ease), box-shadow .4s ease, background-color .4s ease; }
+.dd-journey.is-open { box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), var(--shadow-lift); background-color: var(--pane-solid); }
+.dd-journey[hidden] { display: none; }
+.dd.has-trail:not(.has-home) .dd-ft { display: none; }
+/* the trail is the token view's way back; the home has its own (yours) */
+.dd.has-home .dd-journey { display: none; }
+.dd-journey__k { font-family: var(--mono); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); padding: 0 6px 0 10px; white-space: nowrap; cursor: default; user-select: none; }
+/* the window on the way: the track slides inside it */
+.dd-journey__view { position: relative; overflow: hidden; flex: 0 0 auto; border-radius: 999px; padding: 1px 0; transition: width .55s var(--tr-ease); }
+.dd-journey__track { position: relative; display: flex; align-items: center; gap: 2px; width: max-content; transition: transform .55s var(--tr-ease); will-change: transform; }
+.dd-journey.is-snap, .dd-journey.is-snap .dd-journey__view, .dd-journey.is-snap .dd-journey__track { transition: none; }
+.dd-journey.is-wheel .dd-journey__track { transition-duration: .12s; }
+/* the edges fade where more of the way is out of sight */
+.dd-journey.is-open.has-l .dd-journey__view { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 26px); mask-image: linear-gradient(90deg, transparent 0, #000 26px); }
+.dd-journey.is-open.has-r .dd-journey__view { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent); }
+.dd-journey.is-open.has-l.has-r .dd-journey__view { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 26px, #000 calc(100% - 26px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 26px, #000 calc(100% - 26px), transparent); }
+.dd-journey__sep { color: var(--faint); font-size: 12px; padding: 0 1px; flex: 0 0 auto; }
+.dd-journey [data-step] { appearance: none; border: 0; background: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 5px; border-radius: 999px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--mute); white-space: nowrap; flex: 0 0 auto; transition: color .18s, background-color .18s; }
+.dd-journey [data-step]:hover { color: var(--ink); background: var(--hover-bg); }
+.dd-journey button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.dd-journey [data-step][aria-current="step"] { color: var(--ink); font-weight: 600; background: var(--pane-solid); box-shadow: inset 0 1px 0 var(--glass-inner), inset 0 0 0 1px var(--glass-rim); cursor: default; }
+.dd-journey__mark { width: 18px; height: 18px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; flex: 0 0 auto; font-style: normal; font-size: 7px; font-weight: 600;
+  border: 1px solid var(--line); background: var(--card); color: var(--mute); }
+.dd-journey__mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dd-journey__mark.is-wallet { border-style: dashed; border-color: var(--faint); font-size: 8px; }
+.dd-journey__mark.is-home { font-size: 12px; }
+/* the folded ends: the steps out of the window as a little pile of their
+   own marks and a count; open, they fold away into the slide */
+.dd-journey__stack { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; display: inline-flex; align-items: center; flex: 0 0 auto; overflow: hidden; border-radius: 999px;
+  max-width: 90px; opacity: 1; color: var(--mute); transition: max-width .45s var(--tr-ease), opacity .25s ease .12s, background-color .18s, color .18s; }
+.dd-journey__stack[hidden] { display: none; }
+.dd-journey__stack > * { flex: 0 0 auto; }
+.dd-journey__stack b { font-family: var(--mono); font-size: 9.5px; font-weight: 500; padding: 0 9px 0 5px; }
+.dd-journey__stack.is-r b { order: -1; padding: 0 5px 0 9px; }
+.dd-journey__stack:hover { background: var(--hover-bg); color: var(--ink); }
+.dd-journey__pile { display: inline-flex; align-items: center; padding: 3px 0 3px 4px; }
+.dd-journey__stack.is-r .dd-journey__pile { padding: 3px 4px 3px 0; }
+.dd-journey__mark.is-mini { width: 16px; height: 16px; font-size: 6.5px; margin-left: -7px; box-shadow: 0 0 0 1.5px var(--pane-solid); transition: transform .3s cubic-bezier(.22,1.3,.36,1); }
+.dd-journey__mark.is-mini:first-child { margin-left: 0; }
+.dd-journey__stack:hover .dd-journey__mark.is-mini:nth-child(2) { transform: translateX(3px); }
+.dd-journey__stack:hover .dd-journey__mark.is-mini:nth-child(3) { transform: translateX(6px); }
+.dd-journey.is-open .dd-journey__stack { max-width: 0; opacity: 0; pointer-events: none; transition: max-width .45s var(--tr-ease), opacity .15s ease; }
+/* the chevrons: round glass beads that only exist when the way is longer
+   than the room */
+.dd-journey__nav { appearance: none; border: 0; padding: 0; flex: 0 0 auto; width: 0; height: 26px; margin: 0; border-radius: 50%; overflow: hidden; opacity: 0; pointer-events: none; cursor: pointer;
+  display: grid; place-items: center; color: var(--ink); background: var(--pane-solid); background-image: var(--glass-sheen);
+  box-shadow: inset 0 1px 0 var(--glass-inner), 0 0 0 1px var(--glass-rim), 0 4px 12px -6px rgba(0, 0, 0, .35);
+  transition: width .45s var(--tr-ease), margin .45s var(--tr-ease), opacity .25s ease, transform .25s cubic-bezier(.22,1.3,.36,1), background-color .18s; }
+.dd-journey__nav svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.dd-journey.is-open.is-over .dd-journey__nav { width: 26px; margin: 0 2px; opacity: 1; pointer-events: auto; }
+.dd-journey.is-open.is-over .dd-journey__nav:disabled { opacity: .3; cursor: default; }
+.dd-journey__nav:not(:disabled):hover { background-color: var(--card); }
+.dd-journey__nav.is-prev:not(:disabled):hover { transform: translateX(-2px); }
+.dd-journey__nav.is-next:not(:disabled):hover { transform: translateX(2px); }
+.dd-journey__nav:not(:disabled):active { transform: scale(.92); }
+.dd-journey .is-new { animation: ddCrumb .55s cubic-bezier(.22,1.3,.36,1) both; }
+@keyframes ddCrumb { from { opacity: 0; transform: translateX(-10px) scale(.9); } }
+
+@media (max-width: 640px) {
+  /* On a phone the pane is the bottom sheet: with the bubbles up it lowers
+     to make the room above it the wallet's. */
+  .dd.has-wground .dd-wal { height: 42vh; max-height: 42vh; }
+  .dd-wground__read { display: none; }
+  .dd-journey { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dd #stage, .dd-wal__full { transition: none; }
+  .dd-coin.is-waiting::before, .dd-journey .is-new { animation: none; }
+  .dd-journey, .dd-journey__view, .dd-journey__track, .dd-journey__stack, .dd-journey__nav, .dd-journey__mark { transition: none !important; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Holder map — shared with the Web Analyzer and the widget
+   ═══════════════════════════════════════════════════════════════════════════
+   The block below is generated: dido/build.mjs slices it out of
+   webapp/index.html through shared/holdermap/extract.mjs, exactly as the
+   analysis engine is sliced out of the ENGINE markers. Do not edit it here —
+   edit the HOLDERMAP-CSS block in webapp/index.html and rebuild. */
+{{HOLDERMAP_CSS}}
+
+

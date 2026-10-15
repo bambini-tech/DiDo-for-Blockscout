@@ -2,6 +2,9 @@ import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
 import { CHAINS, chainByKey, type Chain } from './chains.js';
 import type { BlockscoutClient } from './blockscout/client.js';
 import { Service, type Reply, type ServiceOptions } from './service.js';
+import { registerWeb } from './web.js';
+import { registerIntel } from './intel-routes.js';
+import { MappedLog } from './mapped.js';
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
@@ -10,6 +13,12 @@ export interface AppOptions {
   version: string;
   service?: ServiceOptions;
   logger?: boolean;
+  /** Serve the built DiDo page from this directory. */
+  webDir?: string;
+  /** False when no Blockscout key is configured: the page then shows no map. */
+  holderIntel?: boolean;
+  /** Uncached cluster scans per IP per minute. */
+  scansPerMinute?: number;
 }
 
 export function buildApp(opts: AppOptions): FastifyInstance {
@@ -17,6 +26,14 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   const service = new Service(opts.client, opts.service);
 
   app.get('/health', async () => ({ ok: true, version: opts.version }));
+  if (opts.webDir) registerWeb(app, { dir: opts.webDir, version: opts.version, holderIntel: opts.holderIntel ?? true });
+  const mapped = new MappedLog();
+  registerIntel(app, service, {
+    configured: opts.holderIntel ?? true,
+    ...(opts.scansPerMinute !== undefined ? { scansPerMinute: opts.scansPerMinute } : {}),
+    onMapped: (chain, token, symbol, name, price) => mapped.record(chain, token, symbol, name, price),
+  });
+  app.get('/api/most-scanned', async () => ({ ok: true, error: null, data: { window_h: 24, tokens: mapped.top() } }));
 
   app.get('/api/chains', async () => ({
     chains: CHAINS.map(({ key, name, chainId, explorer }) => ({ key, name, chainId, explorer })),

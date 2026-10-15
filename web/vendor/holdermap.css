@@ -1,0 +1,544 @@
+  /*HOLDERMAP-CSS-START*/
+  /* No rule in this block may be an inline style attribute: the widget serves
+     its page under a self-only CSP with no 'unsafe-inline', so a style="" in
+     the shared markup would be dropped there and silently render wrong. Its
+     build test greps for exactly that. */
+  .holder-map-section { margin-top: 22px; }
+  .holder-map-title { display: block; margin-top: 22px; }
+  .holder-signals { margin-top: 16px; }
+  .holder-map-empty { padding: 20px; }
+  .holder-legend-swatch--role-sniper { background: var(--role-sniper); }
+  .holder-legend-swatch--role-bundle { background: var(--role-bundle); }
+  .holder-legend-swatch--role-insider { background: var(--role-insider); }
+  .holder-legend-swatch--role-fresh { background: var(--role-fresh); }
+  /* The row itself must not take the tint -- only its swatch does. */
+  .holder-legend-row.holder-legend-swatch--role-sniper,
+  .holder-legend-row.holder-legend-swatch--role-bundle,
+  .holder-legend-row.holder-legend-swatch--role-insider,
+  .holder-legend-row.holder-legend-swatch--role-fresh { background: none; }
+  /* The help affordance. A question mark in the map's own corner, in the
+     same pill language as every other control, opening a two-column key on
+     hover, focus or tap. It replaces a permanent line of instructions above
+     the panel -- read once, then furniture forever. */
+  .hm-help { position: relative; display: inline-flex; }
+  .hm-help__btn { width: 27px; padding: 0; height: 27px; justify-content: center; border-radius: 999px; font-size: 11px; }
+  .hm-help__pop {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 8;
+    display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: baseline;
+    width: max-content; max-width: min(260px, calc(100vw - 32px));
+    padding: 11px 13px; border: 1px solid var(--line); border-radius: 14px;
+    background: color-mix(in srgb, var(--card) 92%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(150%); backdrop-filter: blur(16px) saturate(150%);
+    box-shadow: var(--shadow-soft);
+    opacity: 0; visibility: hidden; transform: translateY(-3px);
+    transition: opacity .16s, transform .16s, visibility 0s .16s;
+  }
+  .hm-help:hover .hm-help__pop,
+  .hm-help:focus-within .hm-help__pop,
+  .hm-help.is-open .hm-help__pop { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+  .hm-help__k { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink); white-space: nowrap; }
+  .hm-help__v { font-size: 11.5px; color: var(--mute); line-height: 1.3; }
+  .holder-map-wrap {
+    position: relative; margin-top: 10px;
+    border: 1px solid var(--line); border-radius: 20px; overflow: hidden;
+    background:
+      radial-gradient(ellipse 130% 100% at 50% -10%, var(--hover-bg), transparent 62%),
+      var(--card);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+  /* Ambient dot field behind the graph -- same motif as the page background,
+     masked to a soft ellipse so the middle of the map stays quiet. */
+  .holder-map-wrap::before {
+    content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 25%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 25%, transparent 80%);
+  }
+  /* The frame. A hairline drawn INSIDE the panel plus a soft fade at the
+     edges, so the constellation ends rather than being cut off by the border
+     -- the difference between a window and a crop. It sits above the map and
+     below the chrome (z 2), so the pills and cards stay crisp on top of it. */
+  .holder-map-wrap::after {
+    content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 5%, transparent);
+    background: radial-gradient(ellipse 96% 96% at 50% 50%,
+      transparent 58%, color-mix(in srgb, var(--card) 62%, transparent) 100%);
+  }
+  .holder-map-wrap.is-fullscreen { background: var(--card); border-radius: 0; }
+
+  /* ── the loading window ──
+     Option 01, "the fill": the mark stands in outline and floods from the
+     feet as the two requests land. It is a veil over the real panel, not a
+     placeholder that gets replaced -- the frame, the dot field and the
+     chrome underneath are already the finished ones, so nothing jumps when
+     it lifts. The skeleton blocks are where the rail and the bottom bar will
+     be, so the shape of the window is right before it has any content. */
+  .hm-loader {
+    position: absolute; inset: 0; z-index: 7;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card);
+    opacity: 1; transition: opacity .5s ease;
+  }
+  .hm-loader.is-done { opacity: 0; pointer-events: none; }
+  .hm-loader__c { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .hm-loader__mark { width: 94px; height: 119px; display: block; overflow: visible; }
+  /* Outline, not a silhouette: the unfilled mark has to read as a vessel. */
+  .hm-loader__ghost { fill: none; stroke: var(--ink); stroke-width: 7; stroke-linejoin: round; opacity: .26; }
+  .hm-loader__fill { fill: var(--ink); }
+  .hm-loader__pct { display: flex; align-items: baseline; gap: 1px; font-family: var(--mono); letter-spacing: -0.02em; }
+  .hm-loader__pct b { font-size: 24px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .hm-loader__pct span { font-size: 11px; color: var(--mute); }
+  .hm-loader__lbl { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+  .hm-loader__note { font-size: 11.5px; color: var(--mute); margin-top: -6px; }
+  .hm-loader__note[hidden] { display: none; }
+  .hm-loader__sk { position: absolute; pointer-events: none; }
+  .hm-loader__sk i, .hm-loader__sk--bar { display: block; border-radius: 14px; background: var(--hover-bg); }
+  .hm-loader__sk--rail { right: 12px; top: 88px; width: 196px; display: flex; flex-direction: column; gap: 6px; }
+  .hm-loader__sk--rail i { height: 44px; }
+  .hm-loader__sk--rail i:first-child { height: 43px; }
+  .hm-loader__sk--bar { left: 12px; bottom: 12px; width: 128px; height: 34px; border-radius: 999px; }
+  /* The mark and the counter breathe together while there is nothing else to
+     watch; the skeletons stay still, because a whole window of pulsing
+     rectangles is a busy screen pretending to be a fast one. */
+  @keyframes hmLoadBreathe { 0%, 100% { opacity: 1; } 50% { opacity: .72; } }
+  .hm-loader__c { animation: hmLoadBreathe 2.4s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .hm-loader__c { animation: none; }
+    .hm-loader { transition: none; }
+  }
+  /* Nothing underneath should be interactive or visible through the veil. */
+  .holder-map-wrap.is-loading .hm-tl,
+  .holder-map-wrap.is-loading .hm-tr,
+  .holder-map-wrap.is-loading .hm-chips,
+  .holder-map-wrap.is-loading .hm-rail,
+  .holder-map-wrap.is-loading .hm-bar { visibility: hidden; }
+  .holder-map-canvas { display: block; position: relative; z-index: 1; }
+  /* While the scan runs, the canvas is an empty div: the <svg> that normally
+     gives the panel its height does not exist yet, and the loader is
+     absolutely positioned, so the window collapsed to its own two border
+     pixels -- the frame vanished at exactly the moment it was supposed to
+     reassure. The empty canvas carries the map's aspect ratio instead, so
+     the window opens at the height it will keep and nothing jumps when the
+     bubbles arrive. Mirrors .holder-map below, breakpoint for breakpoint. */
+  .holder-map-wrap.is-loading .holder-map-canvas { aspect-ratio: 560 / 380; }
+  .holder-map { display: block; width: 100%; height: auto; aspect-ratio: 560 / 380; touch-action: none; cursor: grab; }
+  /* The viewBox is re-cut to the element's real aspect ratio in JS (syncViewBox),
+     so fullscreen uses the whole screen instead of letterboxing a 560x380 window. */
+  .holder-map-wrap.is-fullscreen .holder-map-canvas { width: 100%; height: 100%; }
+  .holder-map-wrap.is-fullscreen .holder-map { width: 100%; height: 100%; aspect-ratio: unset; }
+  .holder-map:active { cursor: grabbing; }
+
+  .holder-node { cursor: pointer; }
+  /* Scale about the bubble itself. Without transform-box, an SVG transform
+     resolves its origin against the whole viewBox, and a hovered bubble would
+     leap across the map instead of swelling in place. */
+  .holder-node__inner { transform-box: fill-box; transform-origin: center; }
+  .holder-node__inner { transition: transform .24s cubic-bezier(.2,.8,.2,1); }
+  .holder-node:hover .holder-node__inner,
+  .holder-node:focus-visible .holder-node__inner { transform: scale(1.09); }
+  .holder-node circle { transition: fill-opacity .2s, stroke-opacity .2s, opacity .2s; }
+  .holder-node text { transition: opacity .2s; }
+  .holder-node { transition: opacity .22s ease; }
+  .holder-node.is-dim { opacity: var(--hm-dim); }
+  .holder-node.is-hot .holder-node__halo,
+  .holder-node:hover .holder-node__halo,
+  .holder-node:focus-visible .holder-node__halo { opacity: 1; }
+  .holder-node:focus-visible .holder-node__body { stroke: var(--ink) !important; stroke-width: 1.5px !important; stroke-dasharray: 3 2; }
+  @keyframes holderPop { from { opacity: 0; transform: scale(.35); } to { opacity: 1; transform: scale(1); } }
+  .holder-node--enter .holder-node__inner { animation: holderPop .55s cubic-bezier(.2,.9,.3,1.15) backwards; }
+
+  .holder-link { transition: opacity .18s, stroke-opacity .18s; }
+  .holder-link.is-dim { opacity: 0.06; }
+  .holder-link.is-hot { stroke-opacity: 0.95; }
+  /* Funding direction reads as movement along the edge, not just an arrowhead --
+     but only on the edges the reader is actually looking at. Forty edges
+     animating at once is a busy screen pretending to be a live one; at rest
+     the map is still, which is what reads as confidence. */
+  @keyframes holderFlow { to { stroke-dashoffset: -21; } }
+  .holder-flow { animation: none; opacity: 0; transition: opacity .18s; }
+  .holder-link.is-hot .holder-flow,
+  .holder-map-wrap.has-drawer .holder-link:not(.is-dim) .holder-flow {
+    animation: holderFlow 1.6s linear infinite; opacity: 1;
+  }
+  .holder-hull { transition: opacity .25s ease; }
+  .holder-hull.is-dim { opacity: 0.3; }
+  /* The group's nameplate. Small, quiet, and attached to the thing it names --
+     see applyViewport, which counter-scales it so it never grows with zoom. */
+  .holder-hull__plate { filter: drop-shadow(0 1px 2px rgba(0,0,0,0.06)); }
+  .holder-node__role, .holder-node__pip { pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .holder-flow { animation: none; opacity: 0.35; }
+    .holder-node__inner { transition: none; }
+  }
+
+  .holder-map-chip {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--mute); background: var(--card);
+    background: color-mix(in srgb, var(--card) 74%, transparent);
+    -webkit-backdrop-filter: blur(12px) saturate(140%); backdrop-filter: blur(12px) saturate(140%);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 11px; cursor: pointer; line-height: 1;
+    transition: color .18s, border-color .18s, background .18s, transform .18s;
+  }
+  .holder-map-chip:hover { color: var(--ink); border-color: var(--hair); transform: translateY(-1px); }
+  .holder-map-chip.on { background: var(--ink); color: var(--btn-ink); border-color: var(--ink); }
+  .holder-map-chip.chip--dash { border-style: dashed; border-color: var(--faint); }
+  .holder-map-chip.chip--dash.on { border-style: solid; }
+  .holder-map-controls {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 2px; padding: 3px;
+    border: 1px solid var(--line); border-radius: 999px;
+    background: var(--card);
+    background: color-mix(in srgb, var(--card) 70%, transparent);
+    -webkit-backdrop-filter: blur(12px) saturate(140%); backdrop-filter: blur(12px) saturate(140%);
+    box-shadow: 0 10px 28px -18px rgba(0,0,0,0.55);
+  }
+  .holder-map-controls .holder-map-chip {
+    border-color: transparent; background: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+    padding: 5px 10px;
+  }
+  .holder-map-controls .holder-map-chip:hover { background: var(--hover-bg); transform: none; }
+  .holder-map-zoomlabel { cursor: default; min-width: 40px; text-align: center; }
+  .holder-map-controls .holder-map-zoomlabel:hover { background: none; color: var(--mute); }
+  .holder-tooltip {
+    position: absolute; z-index: 3; pointer-events: none;
+    background: var(--card);
+    background: color-mix(in srgb, var(--card) 88%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(150%); backdrop-filter: blur(14px) saturate(150%);
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 10px 13px; box-shadow: var(--shadow-soft);
+    display: flex; flex-direction: column; gap: 2px; max-width: 230px;
+  }
+  .holder-tooltip strong { font-size: 12.5px; font-family: var(--mono); letter-spacing: -0.01em; }
+  .holder-tooltip span { font-size: 11px; color: var(--mute); }
+  /* The key is an object, not a caption. Loose text under the panel read as
+     leftovers; boxed and hairlined it reads as the legend of a chart -- the
+     same border language as every pill inside the map. */
+  .holder-legend {
+    display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 14px 0 0;
+    padding: 11px 14px; border: 1px solid var(--line); border-radius: 14px;
+    background: var(--hover-bg);
+  }
+  .holder-legend:empty { display: none; }
+  .holder-legend-row {
+    display: inline-flex; align-items: center; gap: 7px; background: none; border: none; cursor: pointer;
+    font-family: inherit; font-size: 11.5px; color: var(--mute); letter-spacing: -0.01em; padding: 3px 0;
+  }
+  .holder-legend-row:hover, .holder-legend-row:focus-visible { color: var(--ink); }
+  .holder-legend-swatch { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+  .holder-legend-swatch--ink { background: var(--ink); opacity: 0.7; }
+  .holder-legend-swatch--outline { background: transparent; border: 1.5px solid var(--faint); }
+  .holder-legend-swatch--funder { background: transparent; border: 1.5px double var(--ink); }
+  /* The project's own wallets: the heaviest marker in the encoding, because it
+     is the one that says a big group is not a risk. Ink on ink, no hue — the
+     weight carries it (see THE SECOND RULE in CLAUDE.md). */
+  .holder-legend-swatch--team { background: transparent; border: 2px solid var(--ink); box-shadow: 0 0 0 1.5px var(--card), 0 0 0 2.5px var(--hair); }
+  .holder-legend-swatch--lp { background: transparent; border: 1.5px dashed var(--faint); }
+  .holder-legend-swatch--beyond { background: transparent; border: 1.5px dotted var(--ink); opacity: .55; }
+  .holder-legend-swatch--edge-heavy { width: 16px; height: 0; border-radius: 0; border-top: 2px solid var(--ink); }
+  .holder-legend-swatch--edge-solid { width: 16px; height: 0; border-radius: 0; border-top: 1.5px solid var(--mute); }
+  .holder-legend-swatch--edge-dashed { width: 16px; height: 0; border-radius: 0; border-top: 1.5px dashed var(--faint); }
+  .holder-map-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+  .holder-map-foot:empty { display: none; }
+  /* The verdict chip and, when the verdict was reached with a group left out
+     of it, the chip saying so. Kept together at the right end of the foot so
+     the grade is never read without its reason. */
+  .holder-map-foot__flags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  /* "n% team-owned supply excluded" — solid rather than dashed, because it is
+     the sentence that explains the grade next to it, not a footnote. */
+  .flag--own { border-style: solid; border-color: var(--ink); color: var(--ink); }
+  .hm-tip-own { color: var(--ink) !important; font-weight: 600; }
+  .holder-export-row { display: flex; gap: 16px; margin-top: 10px; }
+  /* `display` on an author rule outranks the UA's [hidden] { display:none },
+     so every box that is toggled by the attribute has to say so itself --
+     otherwise "hidden" only stops it being read, not drawn. */
+  .holder-export-row[hidden] { display: none; }
+  .holder-export-row .link-quiet { background: none; }
+
+  /* ── the dossier: everything the map needs lives inside .holder-map-wrap,
+     the element that goes fullscreen -- nothing is one Escape away. Floating
+     pills and glass cards, the same language as the two chips the map had;
+     ink at opacity, no colour. Layout: top-left the fullscreen chip and a
+     summary pill, filter chips on a second row (one row, centred, in
+     fullscreen), index cards down the right, a drawer beside them, the
+     zoom pill along the bottom. ── */
+  .hm-tl, .hm-tr, .hm-chips { position: absolute; top: 12px; z-index: 4; display: flex; align-items: center; gap: 6px; }
+  .hm-tl { left: 12px; max-width: calc(100% - 120px); }
+  /* Above the group rail and the drawer: the help popover drops out of this
+     corner, and .hm-tr is a stacking context, so a z-index on the popover
+     alone cannot lift it past a sibling at the same level. */
+  .hm-tr { right: 12px; z-index: 6; }
+  .hm-chips { top: 48px; left: 12px; right: 12px; flex-wrap: wrap; }
+  .hm-chips:empty { display: none; }
+  .hm-summary { cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .hm-summary:hover { transform: none; color: var(--mute); border-color: var(--line); }
+  /* The right-hand rail is ONE object: a token nameplate on top, the group
+     cards under it. They used to be two floating stacks with their own tops,
+     which drifted apart the moment fullscreen or a narrow window moved either
+     one. The rail owns the position; .hm-index only scrolls inside it. */
+  .hm-rail { position: absolute; right: 12px; top: 88px; z-index: 4; display: flex; flex-direction: column; gap: 6px; width: 196px; max-height: calc(100% - 100px); }
+  .hm-rail.is-gone { display: none; }
+  .hm-index { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+  .hm-index:empty { display: none; }
+  /* Token nameplate. It exists so a fullscreen screenshot still says which
+     token it is -- the tool's own header is outside the fullscreen element.
+     The logo is third-party artwork fetched from the pair data, the one
+     coloured thing in the panel and deliberately so: it identifies someone
+     else's token, it is not our chrome. It is boxed, hairlined and capped at
+     26px so it reads as a data field. When it is missing or blocked, the
+     monogram below stands in and the row looks the same shape. */
+  .hm-token {
+    display: grid; grid-template-columns: 26px 1fr; align-items: center; gap: 9px; padding: 8px 10px 8px 8px;
+    border: 1px solid var(--line); border-radius: 14px;
+    background: color-mix(in srgb, var(--card) 74%, transparent);
+    -webkit-backdrop-filter: blur(12px) saturate(140%); backdrop-filter: blur(12px) saturate(140%);
+  }
+  .hm-token[hidden] { display: none; }
+  .hm-token__mark {
+    width: 26px; height: 26px; border-radius: 50%; overflow: hidden; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); background: var(--card);
+  }
+  .hm-token__mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .hm-token__mono { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0; color: var(--mute); }
+  .hm-token__t { min-width: 0; }
+  .hm-token__t b { display: block; font-size: 12px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The ticker is the half a reader actually searches for, so it never
+     ellipses -- the name above it does. */
+  .hm-token__t span { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); margin-top: 2px; white-space: nowrap; }
+  .hm-idx {
+    display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 9px; padding: 8px 10px 8px 8px;
+    border: 1px solid var(--line); border-radius: 14px; text-align: left; font-family: inherit; color: inherit; cursor: pointer;
+    background: color-mix(in srgb, var(--card) 74%, transparent);
+    -webkit-backdrop-filter: blur(12px) saturate(140%); backdrop-filter: blur(12px) saturate(140%);
+    transition: border-color .18s, transform .18s, opacity .18s;
+  }
+  /* Glass on the rail: a white sheen and a lit top edge over the frosted
+     card, the analyzer's card recipe in monochrome literals so every host
+     gets it without a new token. Hover and the open group lift off the map. */
+  .hm-token, .hm-idx {
+    background-image: linear-gradient(120deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.04) 38%, rgba(255,255,255,0) 60%, rgba(255,255,255,0.07) 100%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 10px 26px -18px rgba(0,0,0,0.5);
+  }
+  .hm-idx { transition: border-color .18s, transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s, opacity .18s; }
+  .hm-idx:hover { border-color: var(--hair); transform: translateX(-3px); }
+  .hm-idx:hover, .hm-idx.is-active { box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 18px 36px -18px rgba(0,0,0,0.6); }
+  .hm-idx.is-active { border-color: var(--ink); }
+  .hm-idx.is-off { opacity: .45; }
+  .hm-idx svg { width: 30px; height: 30px; }
+  /* A flex row that wraps: the "team supply" stamp sits beside the letter when
+     there is room and drops under it when there is not. Inline, with no break
+     opportunity before it, it ran over the percentage on the side rail. */
+  .hm-idx .n { font-size: 12px; letter-spacing: -0.01em; line-height: 1.2; min-width: 0;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; }
+  /* "team" / "7/10 team" on the group card, next to the letter. Solid ink on
+     the card's own background so it reads as a stamp, not as more text: an
+     icon in the legend is something a reader has to go and decode first. */
+  .hm-idx__own {
+    display: inline-block; padding: 2px 6px; border-radius: 4px;
+    background: var(--ink); color: var(--card); font-family: var(--mono);
+    font-size: 8.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+    vertical-align: 1px; white-space: nowrap;
+  }
+  /* Where even its own row is too narrow (the side rail), the stamp breaks
+     onto two lines rather than losing words to an ellipsis. */
+  .hm-idx__own { max-width: 100%; white-space: normal; text-wrap: balance; line-height: 1.25; }
+  .hm-idx .n span { display: block; flex-basis: 100%; font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hm-idx .p { font-family: var(--mono); font-size: 11.5px; }
+  .hm-drawer {
+    /* Sized by its content, capped by the window: a two-wallet group gets a
+       short card, a forty-wallet one grows to the cap and scrolls inside
+       (.hm-drawer__b). It used to be pinned top and bottom, so every group
+       opened a full-height panel whatever it held. */
+    position: absolute; top: 88px; right: 12px; max-height: calc(100% - 100px); width: min(330px, calc(100% - 24px)); z-index: 5;
+    display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+    background: color-mix(in srgb, var(--card) 90%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: var(--shadow-soft);
+    transform: translateX(14px); opacity: 0; pointer-events: none; visibility: hidden;
+    transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .22s, visibility 0s .28s;
+  }
+  .hm-drawer.is-open { transform: none; opacity: 1; pointer-events: auto; visibility: visible; transition-delay: 0s; }
+  /* The drawer covers the cards wherever it is not beside them. */
+  .holder-map-wrap.has-drawer .hm-rail { display: none; }
+
+  /* Fullscreen only earns the one-row layout -- summary left, filters centred,
+     controls right, cards and drawer side by side -- when the row is actually
+     wide enough for all of it. Below this the fullscreen panel keeps the
+     inline geometry: filters on their own line under the summary, drawer over
+     the cards. Centring them unconditionally put the chips straight through
+     the summary pill on any window narrower than about 900px. */
+  @media (min-width: 901px) {
+    .holder-map-wrap.is-fullscreen .hm-chips {
+      top: 12px; left: 50%; right: auto; max-width: 56%;
+      transform: translateX(-50%); justify-content: center;
+    }
+    .holder-map-wrap.is-fullscreen .hm-rail { top: 60px; }
+    .holder-map-wrap.is-fullscreen .hm-drawer { top: 60px; right: 220px; max-height: calc(100% - 72px); }
+    .holder-map-wrap.is-fullscreen.has-drawer .hm-rail { display: flex; }
+  }
+  .hm-drawer__h { display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px; }
+  .hm-drawer__h .t { flex: 1; min-width: 0; }
+  .hm-drawer__h .t b { display: block; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+  .hm-drawer__h .t span { display: block; font-size: 11.5px; color: var(--mute); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hm-letter {
+    width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    font-family: var(--mono); font-size: 10.5px; background: var(--ink); color: var(--btn-ink);
+  }
+  .hm-drawer__tabs { display: flex; align-items: center; gap: 4px; padding: 0 14px 10px; }
+  .hm-drawer__tabs .sp { flex: 1; }
+  .hm-drawer__tabs .holder-map-chip { padding: 5px 9px; font-size: 8.5px; }
+  .hm-drawer__b { flex: 1; overflow-y: auto; min-height: 0; border-top: 1px solid var(--line); scrollbar-width: thin; }
+  .hm-row { display: grid; grid-template-columns: 22px 1fr auto auto 22px; align-items: center; gap: 8px; padding: 7px 10px 7px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .hm-row:hover, .hm-row.is-hot { background: var(--hover-bg); }
+  .hm-row.is-off { opacity: .45; }
+  .hm-row .rk { font-family: var(--mono); font-size: 9.5px; color: var(--faint); text-align: right; }
+  .hm-row .a { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .hm-row .a .k { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+  .hm-row .addr { font-family: var(--mono); font-size: 11px; letter-spacing: -0.01em; }
+  .hm-row .p { font-family: var(--mono); font-size: 11px; }
+  .hm-copy {
+    font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--faint); background: none; border: 1px solid transparent; border-radius: 999px; padding: 3px 7px; cursor: pointer;
+  }
+  .hm-copy:hover { color: var(--ink); border-color: var(--line); }
+  .hm-eye { width: 22px; height: 22px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; color: var(--faint); background: none; border: none; cursor: pointer; }
+  .hm-eye:hover { color: var(--ink); background: var(--hover-bg); }
+  .hm-eye svg { width: 13px; height: 13px; }
+  .hm-ev { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .hm-ev__i { display: grid; grid-template-columns: 8px 1fr; gap: 10px; align-items: start; }
+  .hm-ev__i i { width: 8px; height: 8px; border-radius: 2px; background: var(--ink); margin-top: 5px; }
+  .hm-ev__i i.w { background: none; border: 1px dashed var(--faint); }
+  .hm-ev__i div { font-size: 12px; color: var(--mute); line-height: 1.45; }
+  .hm-ev__i b { color: var(--ink); font-weight: 500; font-family: var(--mono); font-size: 10.5px; }
+  .hm-ev__note { font-size: 11px; color: var(--faint); margin-top: 4px; }
+  .hm-impact { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .hm-impact .big { font-size: 34px; letter-spacing: -0.04em; font-weight: 600; line-height: 1; }
+  .hm-impact .big small { font-size: 12px; color: var(--mute); letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+  .hm-impact p { font-size: 12px; color: var(--mute); line-height: 1.5; }
+  .hm-impact .kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .hm-impact .kv span:nth-child(odd) { color: var(--mute); }
+  .hm-impact .kv span:nth-child(even) { font-family: var(--mono); font-size: 11px; text-align: right; }
+  .hm-empty { padding: 26px 8px; color: var(--faint); font-size: 12.5px; text-align: center; }
+  /* The bottom bar. It held the funding replay too until 2.4.0; now it is
+     the zoom pill alone, kept as a row so the phone stack below can still
+     move it as one piece. */
+  .hm-bar {
+    position: absolute; left: 12px; bottom: 12px; z-index: 4;
+    display: flex; align-items: center; gap: 8px;
+  }
+  /* -- phone --
+     A 560x380 window has no room for a panel once the cards and the zoom
+     pill are in it, so the map squares up and the cards ride
+     along its bottom edge as a scroller. Every rule that positions something
+     against the bottom is repeated per state, because the stack is real:
+     zoom 12..39, cards above that. The .is-fullscreen variants
+     are repeated at matching specificity -- they outrank a bare selector in a
+     media query, and would otherwise pull the drawer to right:200px (a gap
+     for an index column that is not there on a phone) and stretch the card
+     row from top to bottom. */
+  /* ── small screens: the panel stops floating ─────────────────────────────
+     Everything above overlays the map, which is right while the map is big and
+     wrong the moment it is not. On a phone — and in the widget's ~400px card,
+     which is the same problem at the same size — a floating row of group cards
+     covers the very bubbles it is describing, and stacking a zoom pill and
+     that row along the bottom eats a third of the map.
+
+     So below this width the wrap stops being a canvas with things on top of it
+     and becomes a plain vertical stack: filters, map, groups, zoom. Nothing
+     overlaps anything, the map keeps its whole square, and every control is
+     still one thumb away. Only the two corner chips and the drawer stay over
+     the map, because those are map controls and a full read of one group. */
+  @media (max-width: 640px) {
+    .holder-map-wrap { display: flex; flex-direction: column; }
+    /* The map stays first, so .hm-tl and .hm-tr keep floating over the map's
+       own corners instead of landing on the filter row underneath them. */
+    .holder-map-canvas { order: 1; flex: 1 1 auto; min-height: 0; }
+    .holder-map-wrap:not(.is-fullscreen) .holder-map,
+    .holder-map-wrap.is-loading:not(.is-fullscreen) .holder-map-canvas { aspect-ratio: 1 / 1; }
+    /* Fullscreen: the canvas takes what the stack leaves, rather than a
+       height:100% that would push the rest off the screen. */
+    .holder-map-wrap.is-fullscreen .holder-map-canvas { width: 100%; height: auto; }
+    .holder-map-wrap.is-fullscreen .holder-map { height: 100%; }
+
+    .hm-chips,
+    .holder-map-wrap.is-fullscreen .hm-chips {
+      position: static; order: 2; top: auto; left: auto; right: auto;
+      transform: none; max-width: none; justify-content: flex-start;
+      padding: 10px 12px 0;
+    }
+    .hm-rail,
+    .holder-map-wrap.is-fullscreen .hm-rail {
+      position: static; order: 3; flex: 0 0 auto;
+      top: auto; bottom: auto; left: auto; right: auto;
+      width: auto; max-height: none;
+      padding: 10px 12px 0; gap: 8px;
+    }
+    /* Stacked layout: the rail lies down. The nameplate pins to the left and
+       the group cards scroll past it, which costs no vertical room -- and
+       vertical room is the whole budget here, because the map is squaring up
+       above it. */
+    .hm-rail { flex-direction: row; align-items: stretch; }
+    .hm-token { flex: 0 0 auto; width: 140px; grid-template-columns: 22px 1fr; gap: 8px; }
+    .hm-token__mark { width: 22px; height: 22px; }
+    .hm-index { flex: 1 1 auto; min-width: 0; flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 6px; }
+    .hm-idx { min-width: 150px; flex-shrink: 0; }
+    /* An open drawer is the whole view here -- it is inset by 12px and would
+       otherwise have chips and a zoom pill peeking out around its edges. Closing it brings them all back. */
+    .holder-map-wrap.has-drawer .hm-rail,
+    .holder-map-wrap.has-drawer .hm-chips,
+    .holder-map-wrap.has-drawer .hm-bar,
+    .holder-map-wrap.has-drawer .hm-tl,
+    .holder-map-wrap.has-drawer .hm-tr { display: none; }
+
+    .hm-bar,
+    .holder-map-wrap.is-fullscreen .hm-bar {
+      position: static; order: 4; flex: 0 0 auto; flex-wrap: wrap;
+      left: auto; right: auto; bottom: auto; margin: 10px 12px 12px;
+    }
+    /* The skeletons trace the desktop furniture; in the stack they would
+       trace nothing. The mark and the counter carry it on their own. */
+    .hm-loader__sk { display: none; }
+    .holder-map-controls { align-self: flex-start; }
+
+    .hm-drawer,
+    .holder-map-wrap.is-fullscreen .hm-drawer {
+      top: 12px; left: 12px; right: 12px; width: auto; max-height: calc(100% - 24px);
+    }
+  }
+  /* Pinch and double-tap already zoom and refit, so on a touch screen the pill
+     is a whole extra bar for nothing. A narrow window with a mouse keeps it. */
+  @media (max-width: 640px) and (hover: none) {
+    .holder-map-controls { display: none; }
+    /* Nothing left in the bar once the pill is gone. */
+    .hm-bar { display: none; }
+  }
+  /* The wallet card (a click on a bubble): the impact panel's key/value grid
+     and a row of actions; "open wallet" is the host's way further in. */
+  .hm-wcard .kv { margin-top: 0; border-top: 0; padding-top: 0; }
+  /* A click focuses the bubble (it is a button for the keyboard); the ring is
+     for keyboard focus only. */
+  .holder-node:focus:not(:focus-visible) { outline: none; }
+  .hm-wcard__acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .hm-wcard__open { border-color: var(--ink); color: var(--ink); }
+  .hm-ctx { position: absolute; z-index: 8; width: 224px; padding: 6px; border-radius: 14px;
+    background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-soft); }
+  .hm-ctx[hidden] { display: none; }
+  .hm-ctx__h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 8px 2px; }
+  .hm-ctx__h b { font-size: 12.5px; font-weight: 600; }
+  .hm-ctx__h span { font-family: var(--mono); font-size: 10px; color: var(--mute); }
+  .hm-ctx__f { padding: 0 8px 6px; font-family: var(--mono); font-size: 9.5px; letter-spacing: .04em; color: var(--mute); }
+  .hm-ctx__m { display: flex; flex-direction: column; gap: 1px; border-top: 1px solid var(--line); padding-top: 4px; }
+  .hm-ctx__i { appearance: none; display: flex; justify-content: space-between; align-items: center; width: 100%;
+    border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer;
+    padding: 7px 8px; border-radius: 9px; font: inherit; font-size: 12.5px; }
+  .hm-ctx__i span { font-family: var(--mono); font-size: 10px; color: var(--mute); }
+  .hm-ctx__i:hover, .hm-ctx__i:focus-visible { background: var(--hover-bg); outline: none; }
+  .hm-ctx__i[data-hm="wallet-open"] { font-weight: 600; }
+  .hm-row .addr { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; color: inherit; text-align: left;
+    border-bottom: 1px dotted var(--faint); }
+  .hm-row .addr:hover { border-bottom-color: var(--ink); }
+  /*HOLDERMAP-CSS-END*/
