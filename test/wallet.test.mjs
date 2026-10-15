@@ -99,7 +99,7 @@ test('multichain discovery: one lookup, then only the chains the wallet is on (p
   const w = await scanWallet(makeClient(f), W, FOUR);
   const look = seen.find((u) => u.pathname === '/multichain/api/v1/addresses');
   assert.equal(look.searchParams.get('q'), W);
-  assert.deepEqual(look.searchParams.getAll('chain_id').sort(), ['1', '42161', '8453'], 'only indexed chains are asked about');
+  assert.deepEqual(look.searchParams.get('chain_id').split(',').sort(), ['1', '42161', '8453'], 'only indexed chains are asked about');
   const probed = new Set(seen.filter((u) => /^\/\d+\/api\/v2\/addresses\/0x[0-9a-f]{40}$/.test(u.pathname)).map((u) => u.pathname.split('/')[1]));
   assert.deepEqual([...probed].sort(), ['4663', '8453'], 'Base (found) and Robinhood (not indexed); Ethereum and Arbitrum skipped');
   assert.deepEqual(w.chains.map((c) => c.chain), ['base']);
@@ -121,7 +121,7 @@ test('multichain discovery: an aggregator failure falls back to probing every ch
   };
   const w = await scanWallet(makeClient(f), W, FOUR);
   assert.equal(w.discovery.via, 'probe');
-  assert.equal(w.discovery.reason, 'aggregator lookup failed');
+  assert.equal(w.discovery.reason, 'aggregator lookup failed (lookup: HTTP 400)');
   assert.deepEqual(w.failed_chains, ['arbitrum'], 'every chain was probed: the outage is reported, not hidden');
   assert.deepEqual(w.chains.map((c) => c.chain), ['base']);
 });
@@ -216,4 +216,23 @@ test('has_tokens false: no token or NFT reads on that chain', async () => {
   const w = await scanWallet(makeClient(f), W, BASE, 'probe');
   assert.equal(w.total_usd, 2500);
   assert.ok(!f.seen.some((u) => /token-balances|\/nft|\/v2\/api/.test(u.pathname)), 'nothing read that cannot exist');
+});
+
+test('multichain discovery: without the chain list, every chain is asked about in one lookup', async () => {
+  const { resetAggregatorCache } = await import('../dist/blockscout/multichain.js');
+  resetAggregatorCache();
+  const base = fetchFor();
+  const seen = [];
+  const f = async (url) => {
+    const u = new URL(String(url));
+    seen.push(u);
+    if (u.pathname === '/multichain/api/v1/chains') return json({ message: 'Not found' }, 404);
+    if (u.pathname === '/multichain/api/v1/addresses') return json({ items: [{ hash: W, chain_id: '8453' }] });
+    return base(url);
+  };
+  const w = await scanWallet(makeClient(f), W, FOUR);
+  const look = seen.find((u) => u.pathname === '/multichain/api/v1/addresses');
+  assert.deepEqual(look.searchParams.get('chain_id').split(',').sort(), ['1', '42161', '4663', '8453']);
+  assert.deepEqual(w.discovery, { via: 'multichain', found_on: 1, probed: 0, skipped: 3 });
+  assert.deepEqual(w.chains.map((c) => c.chain), ['base']);
 });

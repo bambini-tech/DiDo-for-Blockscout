@@ -17,6 +17,12 @@ const indexed = new TtlCache<Set<number>>(DAY, 4);
 /** A failed read is remembered briefly, so each wallet scan does not pay for the same failure. */
 const RETRY_AFTER = 10 * 60_000;
 
+let lastLookupError: string | null = null;
+/** Why the last address lookup failed, for the scan's `discovery`. */
+export function lookupError(): string | null {
+  return lastLookupError;
+}
+
 /** Why the last chain-list read failed (an HTTP status or "no chains"), for the scan's `discovery`. */
 let lastError: string | null = null;
 export function aggregatorError(): string | null {
@@ -39,9 +45,13 @@ export async function aggregatorChains(client: BlockscoutClient): Promise<Set<nu
 /** The chains (of those asked) where the aggregator knows this address; null on failure. */
 export async function chainsWithAddress(client: BlockscoutClient, address: string, chainIds: number[]): Promise<Set<number> | null> {
   if (!chainIds.length) return new Set();
-  const { data, status } = await client.multichain<{ items?: Array<{ hash?: string; chain_id?: string | number }>; next_page_params?: unknown }>(
+  const { data, status, detail } = await client.multichain<{ items?: Array<{ hash?: string; chain_id?: string | number }>; next_page_params?: unknown }>(
     'addresses', { q: address, chain_id: chainIds, page_size: Math.max(50, chainIds.length) });
-  if (status !== 'ok' || !Array.isArray(data?.items)) return null;
+  if (status !== 'ok' || !Array.isArray(data?.items)) {
+    lastLookupError = status === 'ok' ? 'unreadable answer' : detail ?? status;
+    return null;
+  }
+  lastLookupError = null;
   const me = address.toLowerCase();
   return new Set(data.items.filter((r) => (r.hash ?? '').toLowerCase() === me).map((r) => Number(r.chain_id)).filter((n) => Number.isFinite(n)));
 }
@@ -50,4 +60,5 @@ export async function chainsWithAddress(client: BlockscoutClient, address: strin
 export function resetAggregatorCache(): void {
   indexed.clear();
   lastError = null;
+  lastLookupError = null;
 }

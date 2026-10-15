@@ -91,14 +91,12 @@ export class BlockscoutClient {
 
   /**
    * GET /multichain/api/v1/{path}: Blockscout's multichain aggregator, one
-   * answer across every chain it indexes. An array value repeats the
-   * parameter (chain_id=1&chain_id=8453).
+   * answer across every chain it indexes. An array value is sent comma
+   * separated (chain_id=1,8453): the aggregator refuses a repeated parameter.
    */
   async multichain<T>(path: string, params: Record<string, string | number | Array<string | number>> = {}): Promise<Result<T>> {
     const url = new URL(`${this.baseUrl}/multichain/api/v1/${path.replace(/^\/+/, '')}`);
-    for (const [k, v] of Object.entries(params)) {
-      for (const one of Array.isArray(v) ? v : [v]) url.searchParams.append(k, String(one));
-    }
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, Array.isArray(v) ? v.join(',') : String(v));
     const res = await this.request(url, `Multichain ${path}`);
     if (!res) return { data: null, status: 'error', detail: 'no answer' };
     if (res.status === 404) return { data: null, status: 'absent' };
