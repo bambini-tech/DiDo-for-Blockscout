@@ -33,7 +33,8 @@ Polygon, OP Mainnet, Celo, Scroll, ZKsync, Unichain, Robinhood Chain and Arc.
   supply, the liquidity pools as one LP bubble, burn addresses left out.
 - **See who belongs together.** Holders linked into clusters by how they were
   funded (below), each cluster with its share, its funder and the evidence
-  behind it.
+  behind it. A cluster is drawn whole: members ranked below the top 64 join
+  the map with a dotted ring, at their real rank.
 - **See the insiders and the snipers.** Role rings on the map: the deployer,
   wallets the deployer funded, wallets that bought in the launch block
   (bundles) or within a minute of it (snipers), and fresh wallets.

@@ -17,6 +17,8 @@ import { classify } from './classify.js';
 
 /** Bubbles on the map. */
 export const TOP_OWNERS = 64;
+/** Groups the map draws (cluster letters A..E). */
+export const MAP_CLUSTERS = 5;
 /** A wallet with fewer plain transactions than this in its whole life is "fresh". */
 export const FRESH_MAX_TXS = 10;
 
@@ -28,14 +30,44 @@ export interface Owner {
   first_ts?: number;
   fund_ts?: number;
   kind?: 'contract' | 'sink';
+  /** A group member ranked below the top rows, drawn with its group. */
+  beyond?: boolean;
 }
 
 const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const pctOf = (h: Holder) => round(h.share ?? 0, 4);
 
-export function basePayload(tok: TokenResponse, pair?: string | null) {
+/** The holders that are people: pools and burn addresses left out, in rank order. */
+function split(tok: TokenResponse, pair?: string | null) {
   const { pools, burn } = classify(tok.holders, pair);
-  const people = tok.holders.filter((h) => !pools.has(h.address) && !burn.has(h.address));
+  return { pools, burn, people: tok.holders.filter((h) => !pools.has(h.address) && !burn.has(h.address)) };
+}
+
+/**
+ * The rows the map draws: the top holders, then every member of a drawn group
+ * that ranks below them, in rank order and flagged `beyond`. The walk traces
+ * more holders than the map has bubbles, so without these a group of wallets
+ * at ranks 40 and 80 would read "2 wallets" with one drawn and its link
+ * dropped. Their share is already in the holder list: no extra request.
+ */
+export function mapRows(tok: TokenResponse, clusters: { members: string[] }[], pair?: string | null): Owner[] {
+  const { people } = split(tok, pair);
+  const rows: Owner[] = people.slice(0, TOP_OWNERS).map((h, i) => ({ address: h.address, pct: pctOf(h), rank: i + 1 }));
+  const drawn = new Set(rows.map((o) => o.address));
+  const rankOf = new Map(people.map((h, i) => [h.address, i]));
+  const extra = new Map<number, Owner>();
+  for (const cl of clusters.slice(0, MAP_CLUSTERS)) {
+    for (const m of cl.members) {
+      const i = rankOf.get(m);
+      if (drawn.has(m) || i === undefined) continue;
+      extra.set(i, { address: m, pct: pctOf(people[i]!), rank: i + 1, beyond: true });
+    }
+  }
+  return [...rows, ...[...extra.keys()].sort((x, y) => x - y).map((i) => extra.get(i)!)];
+}
+
+export function basePayload(tok: TokenResponse, pair?: string | null) {
+  const { pools, burn, people } = split(tok, pair);
   const sum = (list: Holder[]) => round(list.reduce((s, h) => s + (h.share ?? 0), 0));
   const top10 = sum(people.slice(0, 10));
   const owners: Owner[] = people.slice(0, TOP_OWNERS).map((h, i) => ({ address: h.address, pct: pctOf(h), rank: i + 1 }));
@@ -77,14 +109,13 @@ export function fullPayload(c: ClusterResponse, pair?: string | null) {
   const a = c.analysis;
   const supply = BigInt(c.token.totalSupply || '0');
   const shareOfRaw = (raw: string) => (supply > 0n ? Number((BigInt(raw) * 1_000_000n) / supply) / 10_000 : 0);
-  const pctBy = new Map(base.top_owners.map((o) => [o.address, o.pct]));
   const deployer = c.deployer.address;
 
   const bundles = new Set(c.launch.bundles.map((b) => b.buyer));
   const snipers = new Set(c.launch.snipers.map((b) => b.buyer));
   const contracts = new Set(c.holders.filter((h) => h.isContract).map((h) => h.address));
 
-  const owners: Owner[] = base.top_owners.map((o) => {
+  const owners: Owner[] = mapRows(c, a.clusters, pair).map((o) => {
     const w = a.wallets[o.address];
     const roles: string[] = [];
     if (o.address === deployer) roles.push('dev');
@@ -138,7 +169,10 @@ export function fullPayload(c: ClusterResponse, pair?: string | null) {
   }
   const links = [...byPair.values()];
 
-  const sumPct = (pred: (o: Owner) => boolean) => round(owners.filter(pred).reduce((s, o) => s + o.pct, 0), 1);
+  // The summary counts the top holders, as before; group wallets drawn from
+  // below them do not change "fresh" or "insider" shares of the top list.
+  const top = owners.filter((o) => !o.beyond);
+  const sumPct = (pred: (o: Owner) => boolean) => round(top.filter(pred).reduce((s, o) => s + o.pct, 0), 1);
   const has = (r: string) => (o: Owner) => Boolean(o.roles?.includes(r));
   const launchPct = (buys: Buy[]) => round(buys.reduce((s, b) => s + shareOfRaw(b.raw), 0), 1);
   const measured = c.launch.measured;
@@ -158,9 +192,9 @@ export function fullPayload(c: ClusterResponse, pair?: string | null) {
     reached_n: a.stats.traced,
     traces_failed: a.stats.failed,
     fresh_pct: sumPct(has('fresh')),
-    fresh_n: owners.filter(has('fresh')).length,
+    fresh_n: top.filter(has('fresh')).length,
     insider_pct: insiderPct,
-    insider_n: owners.filter((o) => has('insider')(o) || has('dev')(o)).length,
+    insider_n: top.filter((o) => has('insider')(o) || has('dev')(o)).length,
     dev_found: Boolean(deployer && drawn.has(deployer)),
     deployer,
     sniper_launch_pct: measured ? launchPct(c.launch.snipers) : null,
