@@ -10,7 +10,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { chainByKey, type Chain } from './chains.js';
-import type { Service } from './service.js';
+import type { ClusterResponse, Reply, Service } from './service.js';
 import { basePayload, fullPayload } from './holders.js';
 import { startWalletScan, type Discovery, type WalletPricer, type WalletScan } from './wallet.js';
 import type { BlockscoutClient } from './blockscout/client.js';
@@ -33,14 +33,21 @@ export interface IntelOptions {
   /** The entry board; absent, the page shows no board and no garden. */
   board?: BoardKeeper;
   onMapped?: (chain: Chain, token: string, symbol: string | null, name: string | null, priceUsd: number | null) => void;
+  /** How long a full-stage request waits for its walk before answering `pending` (tests shorten it). */
+  fullWaitMs?: number;
 }
 
 const STATUS: Record<string, number> = {
   invalid_token: 400, unsupported_chain: 400, token_not_found: 404, rate_limited: 429, not_configured: 503, internal: 502, feature_disabled: 200, unavailable: 200,
 };
 
+/** How long a full-stage request waits for its walk before answering `pending`. */
+const FULL_WAIT_MS = 20_000;
+
 export function registerIntel(app: FastifyInstance, service: Service, opts: IntelOptions): void {
   const limit = new IpLimiter(opts.scansPerMinute ?? 6, 60_000);
+  /** Finished walks for two minutes, so a page asking again gets the one it waited for. */
+  const finished = new TtlCache<Reply<ClusterResponse>>(2 * 60_000, 500);
   const fail = (reply: FastifyReply, code: string) =>
     reply.code(STATUS[code] ?? 502).header('Cache-Control', 'no-store').send({ ok: false, error: code, data: null });
   const ok = (reply: FastifyReply, data: unknown) => reply.header('Cache-Control', 'no-store').send({ ok: true, error: null, data });
@@ -68,8 +75,21 @@ export function registerIntel(app: FastifyInstance, service: Service, opts: Inte
       return ok(reply, basePayload(r.body, t.pair));
     }
 
-    if (!service.cachedClusters(t.chain, t.token) && !limit.take(req.ip)) return fail(reply, 'rate_limited');
-    const r = await service.clusters(t.chain, t.token, t.pair);
+    // A big token's walk can take minutes; no request is held open that long
+    // (proxies cut long requests). The walk runs on; an unfinished one answers
+    // `pending` and the page asks again. Asking again is free: only starting
+    // a walk counts against the limit, and a finished walk is handed over
+    // even when it is not cached (failed traces).
+    const key = `${t.chain.key}:${t.token}`;
+    const handed = finished.get(key);
+    const known = Boolean(service.cachedClusters(t.chain, t.token) || handed || service.progress(t.chain, t.token).running);
+    if (!known && !limit.take(req.ip)) return fail(reply, 'rate_limited');
+    const job = handed ? Promise.resolve(handed) : service.clusters(t.chain, t.token, t.pair);
+    if (!handed) void job.then((done) => { if (done.kind === 'ok') finished.set(key, done); });
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<null>((res) => { timer = setTimeout(() => res(null), opts.fullWaitMs ?? FULL_WAIT_MS); });
+    const r = await Promise.race([job, late]).finally(() => clearTimeout(timer));
+    if (!r) return reply.code(202).header('Cache-Control', 'no-store').send({ ok: false, error: 'pending', data: null });
     if (r.kind === 'absent') return fail(reply, 'token_not_found');
     if (r.kind === 'error') return fail(reply, 'internal');
     const meta = r.body.token;
