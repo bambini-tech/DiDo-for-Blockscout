@@ -75,10 +75,10 @@ export class BlockscoutClient {
   }
 
   /** GET /{chainId}/api/v2/{path}. */
-  async rest<T>(chainId: number, path: string, params: Record<string, string | number> = {}): Promise<Result<T>> {
+  async rest<T>(chainId: number, path: string, params: Record<string, string | number> = {}, opts: CallOptions = {}): Promise<Result<T>> {
     const url = new URL(`${this.baseUrl}/${chainId}/api/v2/${path.replace(/^\/+/, '')}`);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-    const res = await this.request(url, `REST ${chainId}/${path}`);
+    const res = await this.request(url, `REST ${chainId}/${path}`, opts);
     if (!res) return { data: null, status: 'error', detail: 'no answer' };
     if (res.status === 404) return { data: null, status: 'absent' };
     if (res.status !== 200) return { data: null, status: 'error', detail: `HTTP ${res.status}` };
@@ -113,11 +113,11 @@ export class BlockscoutClient {
    * `status: "0"` with "No transactions found" is an answer -- an empty list --
    * not a failure.
    */
-  async etherscan<T>(chainId: number, params: Record<string, string | number>, opts: { timeoutMs?: number } = {}): Promise<Result<T>> {
+  async etherscan<T>(chainId: number, params: Record<string, string | number>, opts: CallOptions = {}): Promise<Result<T>> {
     const url = new URL(`${this.baseUrl}/v2/api`);
     url.searchParams.set('chain_id', String(chainId));
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-    const res = await this.request(url, `Etherscan ${chainId}/${params.action ?? '?'}`, opts.timeoutMs);
+    const res = await this.request(url, `Etherscan ${chainId}/${params.action ?? '?'}`, opts);
     if (!res) return { data: null, status: 'error', detail: 'no answer' };
     if (res.status !== 200) return { data: null, status: 'error', detail: `HTTP ${res.status}` };
     let body: { status?: string; message?: string; result?: unknown };
@@ -142,7 +142,10 @@ export class BlockscoutClient {
     if (slot > now) await this.sleep(slot - now);
   }
 
-  private async request(url: URL, context: string, timeoutMs = this.timeoutMs): Promise<Response | null> {
+  private async request(url: URL, context: string, opts: CallOptions = {}): Promise<Response | null> {
+    const timeoutMs = opts.timeoutMs ?? this.timeoutMs;
+    const attempts = opts.attempts ?? this.attempts;
+    const started = this.now();
     // One charge per logical request; a refused one is an error, never "nothing here".
     const route = url.pathname === '/v2/api' ? `etherscan:${url.searchParams.get('module')}.${url.searchParams.get('action')}` : url.pathname;
     if (this.ledger && !this.ledger.charge(url.pathname, route)) {
@@ -150,7 +153,11 @@ export class BlockscoutClient {
       return null;
     }
     url.searchParams.set('apikey', this.apiKey);
-    for (let attempt = 1; attempt <= this.attempts; attempt++) {
+    const done = (res: Response | null) => {
+      this.ledger?.observe(route, this.now() - started);
+      return res;
+    };
+    for (let attempt = 1; attempt <= attempts; attempt++) {
       await this.gate();
       this.calls++;
       let res: Response;
@@ -160,21 +167,27 @@ export class BlockscoutClient {
           signal: AbortSignal.timeout(timeoutMs),
         });
       } catch (err) {
-        log(`${context}: network error (attempt ${attempt}/${this.attempts}): ${errName(err)}`);
-        if (attempt < this.attempts) await this.sleep(500 * attempt);
+        log(`${context}: network error (attempt ${attempt}/${attempts}): ${errName(err)}`);
+        if (attempt < attempts) await this.sleep(500 * attempt);
         continue;
       }
       if (res.status === 429 || res.status >= 500) {
-        log(`${context}: HTTP ${res.status} (attempt ${attempt}/${this.attempts})`);
-        if (attempt < this.attempts) await this.sleep(retryAfterMs(res) ?? 500 * attempt);
+        log(`${context}: HTTP ${res.status} (attempt ${attempt}/${attempts})`);
+        if (attempt < attempts) await this.sleep(retryAfterMs(res) ?? 500 * attempt);
         continue;
       }
       if (res.status !== 200 && res.status !== 404) log(`${context}: HTTP ${res.status}`);
-      return res;
+      return done(res);
     }
-    log(`${context}: giving up after ${this.attempts} attempts`);
-    return null;
+    log(`${context}: giving up after ${attempts} attempts`);
+    return done(null);
   }
+}
+
+/** Per-call limits, for reads that have a cheaper fallback than waiting. */
+export interface CallOptions {
+  timeoutMs?: number;
+  attempts?: number;
 }
 
 function retryAfterMs(res: Response): number | null {

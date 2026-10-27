@@ -1,6 +1,6 @@
 {
   "name": "dido-for-blockscout",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "private": true,
   "description": "DiDo for Blockscout: who really holds a token. Holder map, wallet clusters and wallet journeys, built on the Blockscout PRO API.",
   "type": "module",

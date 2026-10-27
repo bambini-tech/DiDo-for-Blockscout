@@ -45,7 +45,7 @@ export class CreditLedger {
   thisMonth = 0;
   refused = 0;
   /** Today's requests and credits per route -- where the credits go. */
-  private byRoute = new Map<string, { requests: number; credits: number }>();
+  private byRoute = new Map<string, { requests: number; credits: number; ms_total?: number; ms_max?: number }>();
 
   constructor(readonly plan: Plan, private readonly now: () => number = Date.now) {}
 
@@ -73,6 +73,14 @@ export class CreditLedger {
       // The aggregator's cluster routes are priced per template: clusters/{cluster_id}/...
       .replace(/^(multichain\/api\/v1\/clusters)\/[^/]+\//, '$1/{cluster_id}/');
     return this.prices[route] ?? this.prices.default ?? 20;
+  }
+
+  /** Record how long a request took (from first send to final answer, retries included). */
+  observe(label: string, ms: number): void {
+    const r = this.byRoute.get(routeOf(label));
+    if (!r) return;
+    r.ms_total = (r.ms_total ?? 0) + ms;
+    r.ms_max = Math.max(r.ms_max ?? 0, ms);
   }
 
   /** Charge a request; false when today's brake is reached (the request is not sent). */
@@ -103,7 +111,12 @@ export class CreditLedger {
       daily_brake: this.plan.dailyBrake,
       monthly_allowance: this.plan.monthlyCredits || null,
       refused_today: this.refused,
-      routes_today: Object.fromEntries([...this.byRoute].sort((a, b) => b[1].credits - a[1].credits)),
+      // Per route: requests, credits, and how long Blockscout took to answer
+      // (retries included): the first place to look when a map is slow.
+      routes_today: Object.fromEntries([...this.byRoute].sort((a, b) => b[1].credits - a[1].credits).map(([k, v]) => [k, {
+        requests: v.requests, credits: v.credits,
+        ...(v.ms_total !== undefined ? { avg_ms: Math.round(v.ms_total / Math.max(1, v.requests)), max_ms: v.ms_max } : {}),
+      }])),
       since: 'process start (in-memory tallies)',
     };
   }

@@ -147,3 +147,14 @@ test('an address page that fails still says whether it is a contract', async () 
   assert.equal(r.status, 'ok');
   assert.equal(r.isContract, true);
 });
+
+test('/health shows how long Blockscout took per route', async () => {
+  const { CreditLedger, PLANS } = await import('../dist/blockscout/credits.js');
+  const l = new CreditLedger(PLANS.builder);
+  l.charge('/1/api/v2/addresses/0x' + '1'.repeat(40) + '/counters');
+  l.observe('/1/api/v2/addresses/0x' + '1'.repeat(40) + '/counters', 1200);
+  l.charge('/1/api/v2/addresses/0x' + '2'.repeat(40) + '/counters');
+  l.observe('/1/api/v2/addresses/0x' + '2'.repeat(40) + '/counters', 800);
+  const r = l.stats().routes_today['/{chain}/api/v2/addresses/:address/counters'];
+  assert.deepEqual(r, { requests: 2, credits: 40, avg_ms: 1000, max_ms: 1200 });
+});
