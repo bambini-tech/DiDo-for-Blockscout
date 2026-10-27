@@ -23,6 +23,53 @@ DigitalDon's own backend.
 GeckoTerminal also cover ([list](#chains)), from Ethereum, Base and Arbitrum to
 Polygon, OP Mainnet, Celo, Scroll, ZKsync, Unichain, Robinhood Chain and Arc.
 
+## Built for the buildathon
+
+DiDo started inside [DigitalDon](https://digitaldon.net). Here is what this
+repository reuses and what was built for the Blockscout PRO API Buildathon.
+
+**Before the buildathon (from DigitalDon, already public in its analyzer)**
+
+- The core engine for the cluster checks: the method of linking holders by
+  how they were funded, and the holder map that draws the result.
+- The analysis engine behind the chart's entry and exit zones
+  (`web/vendor/engine.js`, untouched).
+
+**Sprint 1 (Oct 8–21): DiDo as a discovery product on Blockscout**
+
+- **The Blockscout server.** Every holder, wallet and token fact comes from
+  the Blockscout PRO API, read by this repo's own server (`src/`): one key,
+  one rate gate for 17 chains, retries, a credit ledger priced from
+  Blockscout's published list, and an outage that never reads as "no
+  holders". The cluster method was re-implemented here on Blockscout data
+  (funding traces from `txlist` / `txlistinternal`, launch signals from
+  Transfer logs, infrastructure checks from address counters).
+- **The wallet scan in DiDo.** Click any holder and its portfolio across all
+  17 chains opens beside the map, with what each position cost, booked from
+  the wallet's own Blockscout history.
+- **The trail menu.** DiDo keeps the path you took (start → $TOKEN → wallet →
+  $TOKEN), so an investigation can go token → holder → wallet → token and
+  back without losing its place.
+- **The watchlist**, kept in the browser.
+- **The garden.** The start page is for discovery: an entry board scans
+  moving tokens on every chain, filters them by liquidity, volume, age, score
+  and holder concentration (read from Blockscout), lights the picks, and keeps
+  everything it let go in the garden with the reason.
+- 17 chains, each verified against live data by `npm run verify-chains`.
+
+**Sprint 2 (Oct 25–31): the judges' feedback**
+
+| Feedback | What changed |
+|---|---|
+| Open everything in Blockscout Explorer | Every holder, funder, funding transaction, piece of cluster evidence and the token itself opens on its chain's Blockscout explorer in one click: the token pill, the map's tooltip, cluster cards, the evidence list (with the transaction that proves each link), the wallet card ("open in Blockscout", "funded by … tx ↗") and every holding in the wallet pane. |
+| Show address labels from Blockscout | Holders carry Blockscout's own names and tags ("Binance: Hot Wallet 20", "Chainlink: Noncirculating Supply 3"); funders and the deployer are looked up too. A cluster is named after the entity its wallets share, and a cluster of exchange wallets is labelled as **exchange custody**: drawn as found, and left out of the bubble-risk verdict, which says so. |
+| Catch clusters funded with tokens | Every rule now also runs on the mapped token itself (`tokentx`): a treasury that hands supply to five multisigs within minutes is grouped even though no ETH moved. Safes and multisigs are traced like wallets. Dust and spam drops are ignored, and exchange wallets never link the users who withdrew from them. |
+| Make it clear what is new | This section, and the demo. |
+| A full investigation in the demo | The demo walks one token end to end: map → cluster → funder → evidence on Blockscout → a member's wallet journey ([DEMO.md](DEMO.md)). |
+
+The holder map itself is now this edition's own fork (`web/src/holdermap.js`),
+since labels and explorer links had to live inside it.
+
 ## What you can do
 
 - **Start from the board.** The start page is DiDo's own: a garden of every
@@ -33,9 +80,15 @@ Polygon, OP Mainnet, Celo, Scroll, ZKsync, Unichain, Robinhood Chain and Arc.
 - **See who holds it.** The top 64 holders as bubbles sized by their share of
   supply, the liquidity pools as one LP bubble, burn addresses left out.
 - **See who belongs together.** Holders linked into clusters by how they were
-  funded (below), each cluster with its share, its funder and the evidence
-  behind it. A cluster is drawn whole: members ranked below the top 64 join
-  the map with a dotted ring, at their real rank.
+  funded, with native coin or with the token itself (below), each cluster
+  with its share, its funder and the evidence behind it. A cluster is drawn
+  whole: members ranked below the top 64 join the map with a dotted ring, at
+  their real rank.
+- **See who they are.** Blockscout's labels on every holder, funder and
+  cluster: an exchange's wallets are named as exchange custody instead of
+  looking like a whale group.
+- **Check it at the source.** Every holder, funder, transaction behind a link,
+  and the token itself opens in Blockscout Explorer with one click.
 - **See the insiders and the snipers.** Role rings on the map: the deployer,
   wallets the deployer funded, wallets that bought in the launch block
   (bundles) or within a minute of it (snipers), and fresh wallets.
@@ -56,13 +109,15 @@ gate for the whole process, retries on 429/5xx, and an honest
 | What DiDo shows | Blockscout PRO API call |
 |---|---|
 | Token name, decimals, supply, holder count, USD price | `GET /{chainId}/api/v2/tokens/{token}` |
-| Top holders, with names, tags and contract flags | `GET /{chainId}/api/v2/tokens/{token}/holders` (keyset pages) |
+| Top holders, with names, tags (the labels on the map) and contract flags | `GET /{chainId}/api/v2/tokens/{token}/holders` (keyset pages) |
 | The deployer and the creation transaction | `GET /{chainId}/api/v2/addresses/{token}` → `creator_address_hash`, `creation_transaction_hash` |
 | The creation block (where the launch read starts) | `GET /{chainId}/api/v2/transactions/{hash}` |
 | Launch: bundles and snipers | `GET /v2/api?module=logs&action=getLogs` (Transfer events from the creation block) |
 | Who funded each holder, and every wallet it traded coin with | `GET /v2/api?module=account&action=txlist` (and `txlistinternal` when no plain transfer funded it), oldest first |
+| Who sent each holder the token itself (token-funded clusters, multisigs) | `GET /v2/api?module=account&action=tokentx&contractaddress={token}`, oldest first |
+| Who a funder or the deployer is (labels) | `GET /{chainId}/api/v2/addresses/{address}` → `name`, `metadata.tags`, `public_tags` |
 | Whether a shared funder is infrastructure | `GET /{chainId}/api/v2/addresses/{funder}/counters` |
-| Which chains a wallet is on, in one request | `GET /multichain/api/v1/clusters/multichain/addresses/{wallet}` (the multichain aggregator's `chain_infos`; the chains it covers from `/clusters/multichain/chains`) |
+| Which chains a wallet is on, in one request | `GET /multichain/api/v1/clusters/multichain/search/addresses?q={wallet}` (the multichain aggregator's `chain_infos`; the chains its cluster covers from `/clusters/multichain/chains`) |
 | A wallet's native balance, ENS, name and tags | `GET /{chainId}/api/v2/addresses/{wallet}` |
 | A wallet's tokens and their USD value | `GET /{chainId}/api/v2/addresses/{wallet}/token-balances` |
 | A wallet's transaction count | `GET /{chainId}/api/v2/addresses/{wallet}/counters` |
@@ -83,8 +138,10 @@ browser ──── DiDo page (map, chart, wallet pane)
             └── Blockscout PRO API (one key, one rate gate, every chain)
 ```
 
-A first look at a token takes about 130–230 Blockscout requests (see
-[Plan and credits](#plan-and-credits)), 10–17 seconds on the builder plan;
+A first look at a token takes a few hundred Blockscout requests: two per
+traced holder (its native history and its movements of the token) plus the
+holder list, launch, labels and infrastructure checks (see
+[Plan and credits](#plan-and-credits)), under a minute on the builder plan;
 the map shows the holders within seconds and the clusters join it when the
 walk is done, with a progress line in between. Funding traces are cached per
 wallet and shared across tokens (a day for a wallet whose oldest history is
@@ -161,7 +218,7 @@ second, 100k credits a day, 50 holders traced instead of 100).
 | Holders (the map's first answer) | 3 | 60 |
 | Full map, first look (100 holders traced, launch, deployer, shared funders) | ~130–350 (BRETT on Base: 346) | ~2,600–7,000 |
 | The same token again within 10 minutes | 0 | 0 |
-| Wallet scan (one multichain lookup, then 4 per chain it is on, 3 more per chain with priced tokens for the cost basis) | ~5–25 | ~100–500 |
+| Wallet scan (one multichain search at 120 credits, then 4 per chain it is on, 3 more per chain with priced tokens for the cost basis) | ~5–25 | ~200–600 |
 | Wallet scan without the aggregator (`WALLET_DISCOVERY=probe`, or if it is down) | ~20–40 | ~400–800 |
 | Entry board round (holder checks for the picks) | ~10–40 | ~200–800 |
 
@@ -169,11 +226,13 @@ On 100M credits that is roughly 25,000 first-look maps or 200,000 wallet
 scans a month.
 
 **The wallet scan asks Blockscout's multichain aggregator first.** One
-request says which chains the wallet exists on; only those are read. DiDo
-reads the aggregator's `multichain` cluster, which covers 14 of its 17
-chains (read once a day); the other three (Flow EVM, MegaETH, Robinhood
-Chain today) are probed directly. If the aggregator cannot be read, every
-chain is probed: a wallet is never thinner for it. The answer
+search (`clusters/multichain/search/addresses`, 120 credits, against 17
+probes at 20) says which chains the wallet exists on; only those are read.
+The `multichain` cluster covers 14 of DiDo's 17 chains (its list is read
+once a day); the others (Flow EVM, MegaETH, Robinhood Chain today) are probed
+directly unless the search already placed the wallet there. If the
+aggregator cannot be read, every chain is probed: a wallet is never thinner
+for it. The answer
 says which way it went (`discovery`). A chain where Blockscout reports no
 token at all (`has_tokens: false`) costs one request there.
 
@@ -219,13 +278,17 @@ right after the server starts, so after a deploy the start page has no board
 ## How wallets get linked
 
 For the top 100 holders that are people (pools, burn addresses and named
-contracts are set aside), DiDo reads each wallet's **oldest** 100 transactions:
-where its first coin came from, and every wallet it exchanged native coin with
-early on. Then it links holders, strongest evidence first:
+contracts are set aside; a Safe or multisig is a wallet and is traced), DiDo
+reads each wallet's **oldest** 100 transactions, and its oldest 100 movements
+of the token itself: where its first coin came from, who sent it the supply,
+and every wallet it exchanged either with early on. Then it links holders,
+strongest evidence first. Every rule runs on native coin **and** on the token,
+so a treasury that funds five multisigs with the token, and never with ETH,
+is caught:
 
 | Link | Meaning |
 |---|---|
-| **direct transfer** | one holder sent native coin straight to another |
+| **direct transfer** | one holder sent native coin or the token straight to another |
 | **funded by deployer** | the token's deployer paid this holder |
 | **shared funder** | both were paid by the same wallet, and that wallet is not infrastructure |
 | **same block** | one sender paid them in the same block (a batch) |
@@ -244,9 +307,21 @@ The rules that keep the map honest:
 - **Some holders never link on coin flows.** Named contracts and *sinks*
   (wallets paid by 15+ different senders: deposit addresses, treasuries) would
   wire unrelated people together.
+- **Dust is not funding.** A token movement counts only when it is at least 1%
+  of what the holder holds: spam drops ("visit … to claim your rewards") and
+  1-token test sends land on every big holder and say nothing about who owns it.
+- **Exchanges don't swallow their users.** Wallets Blockscout tags as exchange
+  wallets, and holders paid the token by 15+ different senders, never link on
+  token movements: a user who withdrew from Binance is not Binance.
+- **Exchange custody is named, not judged.** A cluster whose labelled wallets
+  are all exchange wallets is drawn as found, named ("Binance · exchange"),
+  and left out of the bubble-risk verdict, and its evidence says so.
 - A wallet's first-transaction counterparty is shown when nothing else funded
   it, but never used as a link. Clusters held together only by timing or
   amounts are marked *weak*.
+- **Every link carries its proof.** The transaction behind each link (the
+  transfer, or the payment from the shared sender) opens on Blockscout from
+  the evidence list.
 
 **Roles.** *dev* is the deployer; *insider* a holder the deployer funded;
 *bundle* bought in the first block that traded (the first transfer out of a
@@ -306,8 +381,9 @@ src/                     the server (TypeScript, Fastify)
   wallet.ts              the cross-chain wallet scan
   tint.ts                logo colours
   web.ts                 the page, under a strict Content-Security-Policy
-web/src/                 the DiDo page, stylesheet and app
-web/vendor/              DigitalDon's analysis engine and holder map (see SOURCE.md)
+web/src/                 the DiDo page, stylesheet and app, and the holder map
+                         (this edition's fork of DigitalDon's: Blockscout labels and links)
+web/vendor/              DigitalDon's analysis engine (see SOURCE.md), untouched
 web/build.mjs            bundles the page into dist/web
 test/                    node:test suites
 ```
@@ -322,8 +398,14 @@ test/                    node:test suites
 - [x] DiDo's start page: the entry board, the garden, running hot
 - [x] Live deployment and demo
 
-**Sprint 2 (Oct 25–31)**: token security from the verified contract
-(mint, owner, proxy), more chains, and
-whatever the Sprint 1 feedback asks for.
+**Sprint 2 (Oct 25–31): the Sprint 1 feedback**
+- [x] Open in Blockscout Explorer: every holder, funder, link and the token
+- [x] Blockscout address labels on holders, funders and clusters; exchange custody named
+- [x] Clusters funded with the token itself; Safes and multisigs traced
+- [x] What is new, in this README and the demo
+- [x] The demo: one full investigation, start to finish ([DEMO.md](DEMO.md))
+
+**Next**: token security from the verified contract (mint, owner, proxy),
+more chains.
 
 Not financial advice.

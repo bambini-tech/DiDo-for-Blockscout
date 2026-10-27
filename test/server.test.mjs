@@ -81,6 +81,7 @@ test('clusters: holders + deployer + traces + sender counts, end to end', async 
     [h3]: [{ from: d, to: h3, value: '7', blockNumber: '30', timeStamp: '1', isError: '0' }],
   };
   const f = scriptedFetch([
+    [(u) => u.pathname === '/v2/api' && u.searchParams.get('action') === 'tokentx', json({ status: '0', message: 'No token transfers found', result: [] })],
     [(u) => u.pathname === '/v2/api', (u) => json({ status: '1', message: 'OK', result: txOf[u.searchParams.get('address')] ?? [] })],
     [(u) => u.pathname.endsWith('/holders'), json({ items: [
       { value: '40', address: { hash: pool, is_contract: true, name: 'Uniswap V2: Pair' } },
@@ -97,7 +98,7 @@ test('clusters: holders + deployer + traces + sender counts, end to end', async 
   assert.equal(res.statusCode, 200);
   const body = res.json();
   assert.equal(body.deployer.address, d);
-  assert.deepEqual(body.analysis.clusters, [{ id: 1, members: [h1, h2], share: 50, reasons: ['shared funder'] }]);
+  assert.deepEqual(body.analysis.clusters, [{ id: 1, members: [h1, h2], share: 50, reasons: ['shared funder'], tokenLinked: false }]);
   assert.equal(body.analysis.wallets[h3].deployerFunded, true);
   assert.deepEqual(body.pools, [pool], 'a named pool is set aside: never traced or linked');
   assert.equal(body.analysis.wallets[pool], undefined);

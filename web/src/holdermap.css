@@ -541,4 +541,16 @@
   .hm-row .addr { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; color: inherit; text-align: left;
     border-bottom: 1px dotted var(--faint); }
   .hm-row .addr:hover { border-bottom-color: var(--ink); }
+  /* Blockscout: labels and "open in Blockscout" links. Ink at the brand's
+     opacities, never a colour: a link reads as a link by its arrow and rule. */
+  .hm-bs { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--faint); margin-left: 4px; white-space: nowrap; }
+  .hm-bs:hover, .hm-bs:focus-visible { border-bottom-color: var(--ink); }
+  .hm-bs--tx { font-family: var(--mono); font-size: 10px; letter-spacing: .02em; color: var(--mute); }
+  .hm-bs.holder-map-chip { margin-left: 0; border-bottom: 0; }
+  .hm-who { color: var(--mute); font-weight: 400; }
+  .hm-row .addr { white-space: nowrap; flex: none; }
+  .hm-row .a .hm-who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; text-transform: none; letter-spacing: 0; font-family: inherit; font-size: 11px; }
+  .hm-row .a .hm-bs { flex: none; margin-left: 0; }
+  .hm-tip-who { font-weight: 600; }
+  .hm-token__bs { align-self: center; margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
   /*HOLDERMAP-CSS-END*/

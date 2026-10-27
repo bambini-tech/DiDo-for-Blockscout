@@ -127,7 +127,7 @@ export class BlockscoutClient {
       return { data: null, status: 'error', detail: 'unreadable answer' };
     }
     if (String(body.status) === '1') return { data: body.result as T, status: 'ok' };
-    if (/no (transactions|records) found/i.test(String(body.message ?? ''))) {
+    if (/^no [a-z ]*found\.?$/i.test(String(body.message ?? ''))) {
       return { data: [] as unknown as T, status: 'ok' };
     }
     const said = [body.message, typeof body.result === 'string' ? body.result : null].filter(Boolean).join(': ');
