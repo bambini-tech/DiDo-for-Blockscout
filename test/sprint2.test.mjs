@@ -110,3 +110,19 @@ test('map payload: Blockscout labels, exchange custody out of the risk verdict, 
   assert.equal(s.funder_label, 'Chainlink: Treasury');
   assert.equal(d.top_owners.find((o) => o.address === ex1).label, 'Binance: Hot Wallet');
 });
+
+test('a payout contract never links the holders it pays on the token; on native coin only a batch does', () => {
+  const C = A('c'), hs = ['1', '2', '3'].map(A);
+  const holders = hs.map((a) => ({ address: a, share: 2, isContract: false, name: null, raw: String(1000n * E18) }));
+  // Rewards paid by a contract, three holders in one block, identical amounts, repeatedly.
+  const traces = new Map(hs.map((a, i) => trace(a, [tok(C, 'in', 500n * E18 + 7n, 100, 50, `0xr${i}`), tok(C, 'in', 300n * E18, 900, 60, `0xs${i}`)])));
+  const r = linkHolders({ holders, creator: null, traces, txCounts: new Map([[C, 2]]), contractSenders: new Set([C]), tokenDecimals: 18 });
+  assert.equal(r.clusters.length, 0, 'staking rewards are not one hand');
+  // The same contract sending native coin to all three in one block is a disperse batch: still linked, but never as "shared funder".
+  const native = new Map(hs.map((a, i) => [a, { wallet: a, status: 'ok', funder: C, kind: 'internal', firstTs: 1, txCount: 3, windowFull: false,
+    flows: [{ peer: C, dir: 'in', value: '137264000000000', block: 77, ts: 1, internal: true, hash: `0xn${i}` }] }]));
+  const n = linkHolders({ holders, creator: null, traces: native, txCounts: new Map([[C, 2]]), contractSenders: new Set([C]) });
+  assert.equal(n.clusters.length, 1);
+  assert.ok(!n.clusters[0].reasons.includes('shared funder'));
+  assert.ok(n.clusters[0].reasons.includes('same block'));
+});

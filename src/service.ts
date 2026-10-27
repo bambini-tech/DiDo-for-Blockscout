@@ -170,8 +170,17 @@ export class Service {
     });
     const shared = sharedSenders(linkIn, traces);
     const txCounts = new Map<string, number | null>();
+    // Who each shared sender is: its activity (infrastructure or not) and
+    // whether it is a contract -- a payout contract (staking rewards, vesting,
+    // a distributor) pays many holders and owns none of them.
+    const labels: ClusterResponse['labels'] = {};
+    const contractSenders = new Set<string>();
     await mapLimit(shared, this.concurrency, async (s) => {
-      txCounts.set(s, await this.txCount(chain, s));
+      const [count, who] = await Promise.all([this.txCount(chain, s), this.labelOf(chain, s)]);
+      txCounts.set(s, count);
+      if (!who) return;
+      labels[s] = who;
+      if (who.isContract && !labelsOf(who.name, who.tags).wallet) contractSenders.add(s);
     });
 
     const analysis = linkHolders({
@@ -179,6 +188,7 @@ export class Service {
       creator: deployer.address,
       traces,
       txCounts,
+      contractSenders,
       tokenDecimals: tok.body.token.decimals,
       ...(this.opts.link ? { options: this.opts.link } : {}),
     });
@@ -189,17 +199,9 @@ export class Service {
     for (const c of analysis.clusters.slice(0, 5)) {
       for (const l of analysis.links) if (l.via && c.members.includes(l.b)) named.add(l.via);
     }
-    const labels: ClusterResponse['labels'] = {};
-    await mapLimit([...named].filter((a) => !holderSet.has(a)).slice(0, 12), this.concurrency, async (a) => {
-      const key = `${chain.key}:${a}`;
-      let hit = this.addressLabels.get(key);
-      if (!hit) {
-        const r = await getAddressLabels(this.client, chain.chainId, a);
-        if (r.status === 'error') return;
-        hit = { name: r.name, tags: r.tags, isContract: r.isContract };
-        this.addressLabels.set(key, hit);
-      }
-      labels[a] = hit;
+    await mapLimit([...named].filter((a) => !holderSet.has(a) && !labels[a]).slice(0, 12), this.concurrency, async (a) => {
+      const who = await this.labelOf(chain, a);
+      if (who) labels[a] = who;
     });
     const body: ClusterResponse = {
       ...tok.body,
@@ -271,6 +273,18 @@ export class Service {
       }
     });
     return out;
+  }
+
+  /** Blockscout's name, tags and contract flag for an address; cached a day; null when it could not be read. */
+  private async labelOf(chain: Chain, address: string): Promise<{ name: string | null; tags: string[]; isContract: boolean } | null> {
+    const key = `${chain.key}:${address}`;
+    const hit = this.addressLabels.get(key);
+    if (hit) return hit;
+    const r = await getAddressLabels(this.client, chain.chainId, address);
+    if (r.status === 'error') return null;
+    const who = { name: r.name, tags: r.tags, isContract: r.isContract };
+    this.addressLabels.set(key, who);
+    return who;
   }
 
   private async txCount(chain: Chain, address: string): Promise<number | null> {

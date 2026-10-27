@@ -93,6 +93,14 @@ export interface LinkInput {
   txCounts: Map<string, number | null>;
   /** The mapped token's decimals: what makes a token amount "round". */
   tokenDecimals?: number;
+  /**
+   * Senders Blockscout says are contracts (not Safes or multisigs). A
+   * contract that pays out the token (staking rewards, vesting, a
+   * distributor) owns none of the holders it pays: it never links on the
+   * token. On native coin it counts as infrastructure: no shared funder, but
+   * one block, identical amounts or minutes apart still do (a disperse batch).
+   */
+  contractSenders?: Set<string>;
   options?: Partial<LinkOptions>;
 }
 
@@ -285,9 +293,11 @@ export function linkHolders(input: LinkInput): LinkResult {
         continue;
       }
       if (members.length < 2) continue;
+      const contract = input.contractSenders?.has(sender) ?? false;
+      if (contract && pass.token) continue;
       const txCount = input.txCounts.has(sender) ? input.txCounts.get(sender)! : null;
       // Unknown counts as infrastructure: we only claim a shared-funder cluster we could check.
-      const infrastructure = txCount === null ? null : txCount >= opt.infraMinTxs;
+      const infrastructure = contract ? true : txCount === null ? null : txCount >= opt.infraMinTxs;
       if (!senders.some((x) => x.address === sender)) senders.push({ address: sender, funded: members.length, txCount, infrastructure });
       if (infrastructure === false) joinGroup(members, 'shared funder', sender, per, pass.token);
       for (const [reason, group] of fingerprints(per, opt, pass.unit)) joinGroup(group, reason, sender, per, pass.token);
