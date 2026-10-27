@@ -175,10 +175,12 @@ export class Service {
     // a distributor) pays many holders and owns none of them.
     const labels: ClusterResponse['labels'] = {};
     const contractSenders = new Set<string>();
+    const checkedSenders = new Set<string>();
     await mapLimit(shared, this.concurrency, async (s) => {
       const [count, who] = await Promise.all([this.txCount(chain, s), this.labelOf(chain, s)]);
       txCounts.set(s, count);
       if (!who) return;
+      checkedSenders.add(s);
       labels[s] = who;
       if (who.isContract && !labelsOf(who.name, who.tags).wallet) contractSenders.add(s);
     });
@@ -189,6 +191,7 @@ export class Service {
       traces,
       txCounts,
       contractSenders,
+      checkedSenders,
       tokenDecimals: tok.body.token.decimals,
       ...(this.opts.link ? { options: this.opts.link } : {}),
     });
@@ -215,7 +218,8 @@ export class Service {
       fetchedAt: new Date().toISOString(),
     };
     // A result with failed traces or an unread deployer is served, never cached.
-    if (!body.partial && analysis.stats.failed === 0 && deployer.status !== 'error' && launch.status !== 'error') {
+    // ... nor one with a sender we could not identify: the next visit checks it again.
+    if (!body.partial && analysis.stats.failed === 0 && deployer.status !== 'error' && launch.status !== 'error' && checkedSenders.size === shared.length) {
       this.clusterCache.set(`${chain.key}:${address}`, body);
     }
     return { kind: 'ok', body };

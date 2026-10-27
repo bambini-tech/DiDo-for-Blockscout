@@ -101,6 +101,12 @@ export interface LinkInput {
    * one block, identical amounts or minutes apart still do (a disperse batch).
    */
   contractSenders?: Set<string>;
+  /**
+   * Senders whose identity could be read. When given, a token sender outside
+   * it links nobody: we only claim a token-funded cluster we could check is
+   * not a payout contract.
+   */
+  checkedSenders?: Set<string>;
   options?: Partial<LinkOptions>;
 }
 
@@ -294,7 +300,7 @@ export function linkHolders(input: LinkInput): LinkResult {
       }
       if (members.length < 2) continue;
       const contract = input.contractSenders?.has(sender) ?? false;
-      if (contract && pass.token) continue;
+      if (pass.token && (contract || (input.checkedSenders && !input.checkedSenders.has(sender)))) continue;
       const txCount = input.txCounts.has(sender) ? input.txCounts.get(sender)! : null;
       // Unknown counts as infrastructure: we only claim a shared-funder cluster we could check.
       const infrastructure = contract ? true : txCount === null ? null : txCount >= opt.infraMinTxs;

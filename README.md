@@ -216,13 +216,13 @@ second, 100k credits a day, 50 holders traced instead of 100).
 | What | Requests | Credits |
 |---|---|---|
 | Holders (the map's first answer) | 3 | 60 |
-| Full map, first look (100 holders traced, launch, deployer, shared funders) | ~130–350 (BRETT on Base: 346) | ~2,600–7,000 |
+| Full map, first look (100 holders traced on native coin and on the token, launch, deployer, shared funders and their labels) | ~250–450 (LINK on Ethereum: 291 and 400) | ~5,000–9,000 |
 | The same token again within 10 minutes | 0 | 0 |
 | Wallet scan (one multichain search at 120 credits, then 4 per chain it is on, 3 more per chain with priced tokens for the cost basis) | ~5–25 | ~200–600 |
 | Wallet scan without the aggregator (`WALLET_DISCOVERY=probe`, or if it is down) | ~20–40 | ~400–800 |
 | Entry board round (holder checks for the picks) | ~10–40 | ~200–800 |
 
-On 100M credits that is roughly 25,000 first-look maps or 200,000 wallet
+On 100M credits that is roughly 12,000 first-look maps or 200,000 wallet
 scans a month.
 
 **The wallet scan asks Blockscout's multichain aggregator first.** One
@@ -316,7 +316,7 @@ The rules that keep the map honest:
 - **A payout contract owns nobody.** A sender Blockscout says is a contract
   (other than a Safe or multisig), such as staking rewards, vesting or a
   distributor, pays many holders and owns none of them: it never links on
-  the token. On native coin it counts as infrastructure, so only a batch
+  the token. A token sender DiDo could not identify links nobody either. On native coin it counts as infrastructure, so only a batch
   (one block, identical odd amounts, minutes apart) links its recipients.
 - **Exchange custody is named, not judged.** A cluster whose labelled wallets
   are all exchange wallets is drawn as found, named ("Binance · exchange"),
