@@ -175,7 +175,30 @@ export class Service {
     const deployerP = this.creator(chain, address);
     const launchP = deployerP.then((d) => this.launch(chain, address, d.creationTx, pools, new Set([...burn, address, ...(d.address ? [d.address] : [])])));
     prog.phase = 'funders';
-    const [deployer, { traces, tokensComplete }] = await Promise.all([deployerP, this.traceHolders(chain, address, holders, prog)]);
+    // Who a sender is (activity, contract or not) is read the moment it has
+    // paid two holders, while the other traces are still running: the
+    // linking step then finds it ready instead of starting another round.
+    const holderSet0 = new Set(tok.body.holders.map((h) => h.address));
+    const senderJobs = new Map<string, Promise<{ count: number | null; who: Awaited<ReturnType<Service['labelOf']>> }>>();
+    const senderOf = (s: string) => {
+      let job = senderJobs.get(s);
+      if (!job) {
+        job = Promise.all([this.txCount(chain, s), this.labelOf(chain, s)]).then(([count, who]) => ({ count, who }));
+        senderJobs.set(s, job);
+      }
+      return job;
+    };
+    // The deployer's label, read as soon as the deployer is known.
+    void deployerP.then((d) => (d.address && !holderSet0.has(d.address) ? this.labelOf(chain, d.address) : null)).catch(() => null);
+    const paid = new Map<string, Set<string>>();
+    const sawInflow = (holder: string, sender: string) => {
+      if (holderSet0.has(sender)) return;
+      const set = paid.get(sender) ?? new Set<string>();
+      set.add(holder);
+      paid.set(sender, set);
+      if (set.size === 2) void senderOf(sender);
+    };
+    const [deployer, { traces, tokensComplete }] = await Promise.all([deployerP, this.traceHolders(chain, address, holders, prog, sawInflow)]);
     // The launch read runs alongside the traces. The map never waits long on
     // it: past a short grace it goes out without bundles and snipers ("not
     // read yet"), the read finishes in the background and is cached, and the
@@ -203,7 +226,7 @@ export class Service {
     const contractSenders = new Set<string>();
     const checkedSenders = new Set<string>();
     await mapLimit(shared, this.concurrency, async (s) => {
-      const [count, who] = await Promise.all([this.txCount(chain, s), this.labelOf(chain, s)]);
+      const { count, who } = await senderOf(s);
       txCounts.set(s, count);
       if (!who) return;
       checkedSenders.add(s);
@@ -285,7 +308,10 @@ export class Service {
    * in the background and are cached, and the map that went out without them
    * is not cached, so the next look has every token link.
    */
-  private async traceHolders(chain: Chain, token: string, holders: Holder[], prog?: Progress): Promise<{ traces: Map<string, FundingTrace>; tokensComplete: boolean }> {
+  private async traceHolders(
+    chain: Chain, token: string, holders: Holder[], prog?: Progress,
+    onInflow?: (holder: string, sender: string) => void,
+  ): Promise<{ traces: Map<string, FundingTrace>; tokensComplete: boolean }> {
     // Named contracts (routers, lockers, vaults) are never linked, so never
     // traced; a contract that is a wallet (a Safe, a multisig) is.
     const targets = holders.filter((h) => !(h.isContract && h.name) || labelsOf(h.name, h.tags).wallet).slice(0, this.traceLimit);
@@ -301,6 +327,7 @@ export class Service {
         if (t.status === 'ok') this.traces.set(key, t, t.windowFull ? DAY : undefined);
       }
       native.set(h.address, t);
+      if (onInflow && t.status === 'ok') for (const f of t.flows) if (f.dir === 'in') onInflow(h.address, f.peer);
       if (prog) {
         prog.funders.done++;
         prog.pct = Math.round(5 + (85 * prog.funders.done) / Math.max(1, prog.funders.total));
@@ -314,6 +341,10 @@ export class Service {
         if (m.status === 'ok') this.tokenTraces.set(tkey, m, m.flows.length >= TOKEN_WINDOW ? DAY : undefined);
       }
       moves.set(h.address, m);
+      if (onInflow && m.status === 'ok') {
+        const floor = BigInt(h.raw || '0') / 100n;
+        for (const f of m.flows) if (f.dir === 'in' && BigInt(f.value) >= floor) onInflow(h.address, f.peer);
+      }
     });
     await nativeAll;
     let timer: NodeJS.Timeout | undefined;
