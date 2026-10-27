@@ -3,11 +3,12 @@
  * instead of one probe per chain. The PRO API serves the aggregator's cluster
  * routes; DiDo reads the `multichain` cluster:
  *
- *   GET /multichain/api/v1/clusters/multichain/chains            the chains it covers (cached a day)
- *   GET /multichain/api/v1/clusters/multichain/addresses/{a}     `chain_infos`: one entry per chain the address is on
+ *   GET /multichain/api/v1/clusters/multichain/chains                    the chains it covers (cached a day, 20 credits)
+ *   GET /multichain/api/v1/clusters/multichain/search/addresses?q={a}    `chain_infos`: every chain the address is on (120 credits)
  *
- * A chain the cluster does not cover is probed directly by the caller. Every
- * route here is a standard one (20 credits).
+ * One search (120 credits) replaces a probe on every chain (17 x 20). A chain
+ * the cluster does not cover is still probed directly by the caller. (The
+ * gateway does not serve the cheaper `clusters/{id}/addresses/{a}` route.)
  */
 import type { BlockscoutClient } from './client.js';
 import { TtlCache } from '../cache.js';
@@ -43,20 +44,26 @@ export async function aggregatorChains(client: BlockscoutClient): Promise<Set<nu
 }
 
 /**
- * The chains (of those asked) where the cluster knows this address; null on
- * failure. A 404 is a failure too: from the gateway it cannot be told apart
- * from a missing route, and "not found anywhere" must never skip a chain.
+ * Every chain the aggregator knows this address on, from one search across
+ * the cluster (`chain_infos` of the matching row); null on failure. An
+ * address seen nowhere is an empty answer (`items: []`), never an error.
+ * The search can name chains beyond the cluster's list; those count too.
  */
-export async function chainsWithAddress(client: BlockscoutClient, address: string, chainIds: number[]): Promise<Set<number> | null> {
-  if (!chainIds.length) return new Set();
-  const { data, status, detail } = await client.multichain<{ chain_infos?: Record<string, unknown> }>(`clusters/${CLUSTER}/addresses/${address}`);
-  if (status !== 'ok' || !data || typeof data.chain_infos !== 'object' || data.chain_infos === null) {
+export async function chainsWithAddress(client: BlockscoutClient, address: string): Promise<Set<number> | null> {
+  const { data, status, detail } = await client.multichain<{ items?: Array<{ hash?: string; chain_infos?: Record<string, unknown> }> }>(
+    `clusters/${CLUSTER}/search/addresses`, { q: address });
+  if (status !== 'ok' || !data || !Array.isArray(data.items)) {
     lastLookupError = status === 'ok' ? 'unreadable answer' : detail ?? status;
     return null;
   }
   lastLookupError = null;
-  const asked = new Set(chainIds);
-  return new Set(Object.keys(data.chain_infos).map(Number).filter((n) => asked.has(n)));
+  const me = address.toLowerCase();
+  const found = new Set<number>();
+  for (const row of data.items) {
+    if ((row.hash ?? '').toLowerCase() !== me) continue;
+    for (const id of Object.keys(row.chain_infos ?? {})) if (Number.isFinite(Number(id))) found.add(Number(id));
+  }
+  return found;
 }
 
 /** For tests: forget the cached chain list. */

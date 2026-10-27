@@ -227,6 +227,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--ink); outli
 .dd-trail__ca.is-done { color: var(--ink); border-color: var(--ink); }
 .dd-g { width: 12px; height: 12px; display: block; flex: 0 0 auto; }
 .dd-trail__ca { display: inline-flex; align-items: center; gap: 5px; }
+.dd-trail__bs { text-decoration: none; font-family: var(--mono); font-size: 10px; letter-spacing: .04em; }
 .dd-trail__links.is-none { border-style: dashed; color: var(--faint); }
 .dd-trail__links[aria-expanded="true"] { color: var(--ink); border-color: var(--hair); }
 .dd-trail__n { font-size: 9px; letter-spacing: .04em; }

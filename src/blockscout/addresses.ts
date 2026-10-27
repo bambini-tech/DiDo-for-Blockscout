@@ -51,18 +51,20 @@ export async function getTxCount(
   return Number.isFinite(n) ? { count: n, status: 'ok' } : { count: null, status: 'error' };
 }
 
-/** A native-coin movement between the traced wallet and one counterparty. */
+/** A movement of native coin (or, in `tokenFlows`, of the mapped token) between the traced wallet and one counterparty. */
 export interface Flow {
   peer: string;
   dir: 'in' | 'out';
-  /** Wei, as a decimal string. */
+  /** Wei (or the token's raw units), as a decimal string. */
   value: string;
   block: number | null;
   ts: number | null;
   internal: boolean;
+  /** The transaction it happened in: the evidence a reader opens on Blockscout. */
+  hash: string | null;
 }
 
-export type FundingKind = 'transfer' | 'internal' | 'first-tx';
+export type FundingKind = 'transfer' | 'internal' | 'token' | 'first-tx';
 
 export interface FundingTrace {
   wallet: string;
@@ -72,6 +74,7 @@ export interface FundingTrace {
   /**
    * transfer  first inbound plain transfer (strong)
    * internal  first inbound internal transfer, e.g. through a bridge or a contract (strong)
+   * token     no native inflow; the first sender of the mapped token itself (strong)
    * first-tx  no inflow in the window; the counterparty of the wallet's first transaction (weak, shown but never linked on)
    */
   kind: FundingKind | null;
@@ -84,9 +87,29 @@ export interface FundingTrace {
   flows: Flow[];
   /** When status is 'error': what Blockscout said. */
   error?: string;
+  /**
+   * Blockscout has not finished indexing this chain's internal transactions
+   * ("Some internal transactions within this block range have not yet been
+   * processed"): the trace stands on the plain transactions alone.
+   */
+  internalsPending?: boolean;
+  /**
+   * Movements of the mapped token itself, oldest first (`tokentx` filtered to
+   * the token). Wallets funded with the token rather than native coin -- a
+   * treasury handing supply to multisigs -- link on these. Absent when they
+   * were not read.
+   */
+  tokenFlows?: Flow[];
+  /** When the token flows could not be read: what Blockscout said. */
+  tokenError?: string;
 }
 
+/** Blockscout's answer while a chain's internal transactions are still being indexed. */
+export const INTERNALS_PENDING = /not yet been processed/i;
+
 interface RawTx {
+  hash?: string;
+  transactionHash?: string;
   from?: string;
   to?: string;
   value?: string;
@@ -134,8 +157,12 @@ export async function traceFunding(
   const itxs = await client.etherscan<RawTx[]>(chainId, {
     module: 'account', action: 'txlistinternal', address: me, sort: 'asc', page: 1, offset: window,
   });
-  if (itxs.status !== 'ok' || !Array.isArray(itxs.data)) return { ...out, status: 'error', error: `txlistinternal: ${itxs.detail ?? 'unreadable'}` };
-  for (const tx of itxs.data) {
+  if (itxs.status !== 'ok' || !Array.isArray(itxs.data)) {
+    // An indexer that is behind is not a failed read: the plain history stands.
+    if (!INTERNALS_PENDING.test(itxs.detail ?? '')) return { ...out, status: 'error', error: `txlistinternal: ${itxs.detail ?? 'unreadable'}` };
+    out.internalsPending = true;
+  }
+  for (const tx of Array.isArray(itxs.data) ? itxs.data : []) {
     if (tx.isError === '1') continue;
     const flow = toFlow(tx, me, true);
     if (!flow || flow.dir !== 'in') continue;
@@ -164,10 +191,56 @@ function toFlow(tx: RawTx, me: string, internal: boolean): Flow | null {
   if (to === me && from && from !== me) [peer, dir] = [from, 'in'];
   else if (from === me && to && to !== me) [peer, dir] = [to, 'out'];
   else return null;
-  return { peer, dir, value: value.toString(), block: toNum(tx.blockNumber), ts: toNum(tx.timeStamp), internal };
+  const hash = (tx.hash ?? tx.transactionHash ?? '').toLowerCase() || null;
+  return { peer, dir, value: value.toString(), block: toNum(tx.blockNumber), ts: toNum(tx.timeStamp), internal, hash };
+}
+
+/**
+ * The wallet's oldest movements of one token (`account.tokentx` with
+ * `contractaddress`), in one request. How a holder came to hold the token:
+ * who sent it the supply, when, and how much.
+ */
+export async function traceTokenFlows(
+  client: BlockscoutClient,
+  chainId: number,
+  wallet: string,
+  token: string,
+  window = 100,
+): Promise<{ status: Status; flows: Flow[]; error?: string }> {
+  const me = wallet.toLowerCase();
+  const res = await client.etherscan<RawTx[]>(chainId, {
+    module: 'account', action: 'tokentx', contractaddress: token.toLowerCase(), address: me, sort: 'asc', page: 1, offset: window,
+  });
+  if (res.status !== 'ok' || !Array.isArray(res.data)) return { status: 'error', flows: [], error: `tokentx: ${res.detail ?? 'unreadable'}` };
+  const flows: Flow[] = [];
+  for (const tx of res.data) {
+    const flow = toFlow(tx, me, false);
+    if (flow) flows.push(flow);
+  }
+  return { status: 'ok', flows };
 }
 
 function toNum(v: unknown): number | null {
   const n = Number(v);
   return v !== undefined && v !== null && v !== '' && Number.isFinite(n) ? n : null;
+}
+
+/** What Blockscout says about an address: its contract name and public tags. */
+export async function getAddressLabels(
+  client: BlockscoutClient,
+  chainId: number,
+  address: string,
+): Promise<{ name: string | null; tags: string[]; isContract: boolean; status: Status }> {
+  const { data, status } = await client.rest<{
+    name?: string | null;
+    is_contract?: boolean;
+    metadata?: { tags?: Array<{ name?: string; label?: string } | string> } | null;
+    public_tags?: Array<{ display_name?: string; label?: string }> | null;
+  }>(chainId, `addresses/${address}`);
+  if (status !== 'ok' || !data) return { name: null, tags: [], isContract: false, status: status === 'ok' ? 'error' : status };
+  const tags = [
+    ...(data.metadata?.tags ?? []).map((t) => (typeof t === 'string' ? t : t.name ?? t.label ?? '')),
+    ...(data.public_tags ?? []).map((t) => t.display_name ?? t.label ?? ''),
+  ].filter(Boolean);
+  return { name: data.name ?? null, tags: [...new Set(tags)], isContract: Boolean(data.is_contract), status: 'ok' };
 }

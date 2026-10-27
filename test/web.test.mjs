@@ -10,12 +10,12 @@ const root = (p) => fileURLToPath(new URL(`../${p}`, import.meta.url));
 const read = (p) => readFileSync(root(p), 'utf8');
 const WEB = root('dist/web');
 
-test('the bundle carries the vendored engine and holder map byte-for-byte', () => {
+test('the bundle carries the vendored engine and the holder map byte-for-byte', () => {
   const js = read('dist/web/dido.js');
   const css = read('dist/web/dido.css');
   assert.ok(js.includes(read('web/vendor/engine.js')));
-  assert.ok(js.includes(read('web/vendor/holdermap.js')));
-  assert.ok(css.includes(read('web/vendor/holdermap.css')));
+  assert.ok(js.includes(read('web/src/holdermap.js')));
+  assert.ok(css.includes(read('web/src/holdermap.css')));
   assert.ok(!js.includes('{{'), 'every placeholder stamped');
 });
 
@@ -24,7 +24,7 @@ test('the page has nothing inline for the CSP to drop', () => {
   assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/i);
   assert.doesNotMatch(html, /<style[\s>]/i);
   assert.doesNotMatch(html, /\sstyle\s*=/i);
-  assert.doesNotMatch(read('web/vendor/holdermap.js'), /\sstyle="/, 'the map never emits an inline style attribute');
+  assert.doesNotMatch(read('web/src/holdermap.js'), /\sstyle="/, 'the map never emits an inline style attribute');
 });
 
 test('the page knows exactly the chains the server reads, with the same explorers', () => {

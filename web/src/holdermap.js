@@ -41,7 +41,9 @@ function holderGroupsLine(clusters) {
   // When the biggest group is the project's own supply, say so here rather than
   // leaving the number to speak for itself — this line sits next to the risk
   // grade, and "largest 14.2%" alone reads as the finding.
-  const own = w && w.owner ? ` \u00b7 ${w.owner_label || 'project treasury'}` : '';
+  // Labels are Blockscout's tags: third-party text, escaped (this line is set as HTML).
+  const own = w && w.owner ? ` \u00b7 ${esc(w.owner_label || 'project treasury')}`
+    : w && w.label ? ` \u00b7 ${esc(w.label)}${w.exchange && w.label !== 'exchange wallets' ? ', exchange' : ''}` : '';
   return `\u2192 ${n} separate group${n === 1 ? '' : 's'} \u00b7 largest ${largest.toFixed(1)}% (${w && w.wallets ? w.wallets : '?'} wallets${own})`;
 }
 
@@ -458,6 +460,27 @@ function holderGroupsLine(clusters) {
     }
     const clusters = (fullData.clusters || []).slice(0, 5);
     const links = fullData.links || [];
+
+    /* ---- Blockscout: what the map claims, one click from its proof ----
+       Every address, transaction and the token open in the chain's own
+       Blockscout explorer (fullData.explorer), and every address carries the
+       label Blockscout gives it ("Binance: Hot Wallet 20"). Labels come from
+       the owner rows, and from fullData.labels for the funders and the
+       deployer the map names but does not draw. */
+    const explorer = /^https:\/\/[^\s"<>]+$/.test(String(fullData.explorer || '')) ? String(fullData.explorer).replace(/\/+$/, '') : '';
+    const HEX = /^0x[0-9a-fA-F]+$/;
+    const bsHref = (kind, id) => (explorer && HEX.test(String(id || ''))) ? `${explorer}/${kind}/${id}` : '';
+    const bsLink = (kind, id, text, cls) => {
+      const h = bsHref(kind, id);
+      return h ? `<a class="hm-bs${cls ? ` ${cls}` : ''}" href="${esc(h)}" target="_blank" rel="noopener" title="open in Blockscout">${text}</a>` : '';
+    };
+    const whoBy = new Map(Object.entries(fullData.labels || {}));
+    owners.forEach(o => { if (o.label) whoBy.set(o.address, o.label); });
+    const whoOf = a => whoBy.get(a) || '';
+    /* An address as the evidence shows it: short form, Blockscout label, link. */
+    const addrHtml = a => `<b>${esc(truncAddr(a))}</b>${whoOf(a) ? ` <span class="hm-who">${esc(whoOf(a))}</span>` : ''}${bsLink('address', a, '&nearr;')}`;
+    const tokenSym = (info && info.symbol && info.symbol !== '???') ? `$${String(info.symbol).toUpperCase()}` : 'the token';
+    const nativeSym = fullData.native ? String(fullData.native) : 'native coin';
     // Simulation domain. The camera (see "framing" below) decides how much of
     // it the viewer actually sees, so this stays a fixed coordinate space.
     // viewH is the *viewport* height in those units -- it tracks the panel's
@@ -514,7 +537,7 @@ function holderGroupsLine(clusters) {
     }
 
     const nodeLinks = links
-      .map(l => ({ a: nodeById.get(l.source), b: nodeById.get(l.target), kind: l.kind }))
+      .map(l => ({ a: nodeById.get(l.source), b: nodeById.get(l.target), kind: l.kind, reason: l.reason || '', tx: l.tx || '', txA: l.tx_a || '', via: l.via || '', asset: l.asset || '' }))
       .filter(l => l.a && l.b);
     const clusterGroups = clusters.map((c, ci) => ({ nodes: nodes.filter(n => n.clusterIndex === ci) }));
     const largest = nodes.reduce((best, n) => (!n.isLp && (!best || n.pct > best.pct) ? n : best), null);
@@ -1430,7 +1453,8 @@ function holderGroupsLine(clusters) {
           ? (n.fundTs >= launchTs ? `funded ${fmtSpan(n.fundTs - launchTs)} after launch` : `active ${fmtSpan(launchTs - n.fundTs)} before launch`)
           : null;
         const beyondTxt = n.beyond ? `holder #${rankOf(ownerById.get(n.id))} &middot; outside the top ${topN}, shown with its group` : null;
-        tooltip.innerHTML = `<strong>${esc(truncAddr(n.id))}</strong>${n.team ? '<span class="hm-tip-own">project treasury &middot; not for sale</span>' : ''}${beyondTxt ? `<span>${beyondTxt}</span>` : ''}<span>${n.pct.toFixed(2)}% &middot; ${clusterTxt}${n.kind ? ` &middot; ${esc(n.kind)}` : ''}</span>${roleTxt ? `<span>${roleTxt}</span>` : ''}${funderTxt ? `<span>${esc(funderTxt)}</span>` : ''}${whenTxt ? `<span>${esc(whenTxt)}</span>` : ''}`;
+        const whoTxt = whoOf(n.id) ? `<span class="hm-tip-who">${esc(whoOf(n.id))}${(ownerById.get(n.id) || {}).exchange ? ' &middot; exchange' : ''}</span>` : '';
+        tooltip.innerHTML = `<strong>${esc(truncAddr(n.id))}</strong>${whoTxt}${n.team ? '<span class="hm-tip-own">project treasury &middot; not for sale</span>' : ''}${beyondTxt ? `<span>${beyondTxt}</span>` : ''}<span>${n.pct.toFixed(2)}% &middot; ${clusterTxt}${n.kind ? ` &middot; ${esc(n.kind)}` : ''}</span>${roleTxt ? `<span>${roleTxt}</span>` : ''}${funderTxt ? `<span>${esc(funderTxt)}</span>` : ''}${whenTxt ? `<span>${esc(whenTxt)}</span>` : ''}`;
       }
       tooltip.hidden = false;
       // Flip near the edges -- the wrap clips its overflow, so a tooltip that
@@ -1720,7 +1744,8 @@ function holderGroupsLine(clusters) {
       els.token.innerHTML =
         `<span class="hm-token__mark"><span class="hm-token__mono">${esc(mono)}</span></span>` +
         `<span class="hm-token__t"><b>${esc(name || sym)}</b>` +
-        `${sym ? `<span>$${esc(sym.toUpperCase())}</span>` : ''}</span>`;
+        `${sym ? `<span>$${esc(sym.toUpperCase())}</span>` : ''}</span>` +
+        bsLink('token', fullData.token, 'Blockscout&nbsp;&nearr;', 'hm-token__bs');
       const src = (info && info.image_url) ? String(info.image_url) : '';
       if (!/^https:\/\//.test(src)) return;
       const probe = new Image();
@@ -1757,6 +1782,7 @@ function holderGroupsLine(clusters) {
         // this is the line their eye lands on when the grade looks wrong.
         const own = c.owner === 'team' ? 'team supply'
           : c.owner === 'team_partial' ? `${(c.owner_label || '').split(' ')[0]} team supply`
+          : c.label ? `${c.label}${c.exchange && c.label !== 'exchange wallets' ? ' \u00b7 exchange' : ''}`
           : '';
         return `<button type="button" class="hm-idx${selected === ci ? ' is-active' : ''}${off ? ' is-off' : ''}" data-hm="cluster" data-idx="${ci}" aria-pressed="${selected === ci}">${ringSvg(c.pct)}<span class="n">cluster ${CLUSTER_LETTERS[ci]}${own ? `<b class="hm-idx__own">${esc(own)}</b>` : ''}<span>${esc(sub)}</span></span><span class="p num">${(+c.pct || 0).toFixed(1)}%</span></button>`;
       }).join('');
@@ -1775,7 +1801,7 @@ function holderGroupsLine(clusters) {
         : `<span class="holder-legend-swatch holder-legend-swatch--ink"></span>`;
       return `<div class="hm-row${hidden ? ' is-off' : ''}" data-addr="${esc(addr)}">
         <span class="rk num">${rankOf(o)}</span>
-        <span class="a">${dot}<button type="button" class="addr" data-hm="pick" data-addr="${esc(addr)}" title="open this wallet's card">${esc(truncAddr(addr))}</button>${o.kind ? `<span class="k">${esc(o.kind)}</span>` : ''}</span>
+        <span class="a">${dot}<button type="button" class="addr" data-hm="pick" data-addr="${esc(addr)}" title="open this wallet's card">${esc(truncAddr(addr))}</button>${o.label ? `<span class="k hm-who" title="${esc(o.label)}">${esc(o.label)}</span>` : o.kind ? `<span class="k">${esc(o.kind)}</span>` : ''}${bsLink('address', addr, '&nearr;')}</span>
         <span class="p num">${(+o.pct || 0).toFixed(2)}%</span>
         <button type="button" class="hm-copy" data-hm="copy" data-addr="${esc(addr)}" aria-label="copy address">copy</button>
         <button type="button" class="hm-eye" data-hm="${hidden ? 'unhide' : 'hide'}" data-addr="${esc(addr)}" aria-label="${hidden ? 'show' : 'hide'} wallet">${hidden ? HM_EYE_OFF : HM_EYE}</button>
@@ -1804,13 +1830,46 @@ function holderGroupsLine(clusters) {
       if (c.owner === 'team') {
         items.push([true, `declared <b>${esc(c.owner_label || 'team')}</b> \u2014 supply the project holds for scheduled burns and partner deals, and the only group left out of the bubble-risk verdict`]);
       }
+      /* Exchange custody: Blockscout labels the wallets, so the group is named
+         for what it is -- many users' coins in one place, not one hand -- and,
+         like the team exception, it says what that changed. */
+      if (c.exchange) {
+        items.push([true, `Blockscout labels these wallets <b>${esc(c.label || 'exchange wallets')}</b>: exchange custody, many users' coins rather than one holder. Drawn as found, and left out of the bubble-risk verdict`]);
+      } else if (c.label && c.label_from === 'members') {
+        items.push([true, `Blockscout labels most of these wallets <b>${esc(c.label)}</b>`]);
+      }
+      const HOW = {
+        'shared funder': 'by the same sender',
+        'same block': 'in the same block',
+        'identical amounts': 'with the exact same amount',
+        'funded together': 'within minutes of each other',
+        'funded by deployer': 'by the deployer',
+      };
+      /* Group links from one sender read as one line: the wallets it paid,
+         how (same sender, same block, minutes apart), and every payment as a
+         transaction to open on Blockscout. */
+      const groups = new Map();
       nodeLinks.forEach(l => {
         if (!set.has(l.a.id) || !set.has(l.b.id)) return;
-        if (l.kind === 'transfer') items.push([true, `<b>${esc(truncAddr(l.a.id))}</b> sent this token to <b>${esc(truncAddr(l.b.id))}</b>`]);
-        else if (l.kind === 'funder') items.push([true, `<b>${esc(truncAddr(l.b.id))}</b> funded <b>${esc(truncAddr(l.a.id))}</b> directly`]);
-        else items.push([strongGroup, `<b>${esc(truncAddr(l.a.id))}</b> and <b>${esc(truncAddr(l.b.id))}</b> share a funder`]);
+        const asset = l.asset === 'token' ? tokenSym : nativeSym;
+        const tx = bsLink('tx', l.tx, 'tx&nbsp;&nearr;', 'hm-bs--tx');
+        if (l.kind === 'transfer') { items.push([true, `${addrHtml(l.a.id)} and ${addrHtml(l.b.id)} sent each other ${esc(asset)} directly ${tx}`]); return; }
+        if (l.kind === 'funder') { items.push([true, `${addrHtml(l.b.id)} (the deployer) funded ${addrHtml(l.a.id)} with ${esc(asset)} ${tx}`]); return; }
+        const key = `${l.reason}|${l.via}|${l.asset}`;
+        if (!groups.has(key)) groups.set(key, { reason: l.reason, via: l.via, asset, wallets: new Set(), txs: new Set() });
+        const g = groups.get(key);
+        g.wallets.add(l.a.id); g.wallets.add(l.b.id);
+        if (l.txA) g.txs.add(l.txA);
+        if (l.tx) g.txs.add(l.tx);
       });
-      if (c.funder) items.push([strongGroup, `funder <b>${esc(truncAddr(c.funder))}</b> ${c.funder_is_holder ? 'is itself a top holder' : 'is not among the top holders'}`]);
+      groups.forEach(g => {
+        const ws = [...g.wallets];
+        const who = ws.length === 2 ? `${addrHtml(ws[0])} and ${addrHtml(ws[1])}` : `${ws.length} wallets (${ws.map(addrHtml).join(', ')})`;
+        const txs = [...g.txs].map((t, i) => bsLink('tx', t, `tx${g.txs.size > 1 ? `&nbsp;${i + 1}` : ''}&nbsp;&nearr;`, 'hm-bs--tx')).join(' ');
+        items.push([strongGroup || g.reason === 'shared funder' || g.reason === 'same block',
+          `${who} were funded with ${esc(g.asset)} ${HOW[g.reason] || 'by the same sender'}${g.via ? `: ${addrHtml(g.via)}` : ''} ${txs}`]);
+      });
+      if (c.funder) items.push([strongGroup, `funder ${addrHtml(c.funder)} ${c.funder_is_holder ? 'is itself a top holder' : 'is not among the top holders'}`]);
       const ts = (c.members || []).map(m => (nodeById.get(m) || {}).fundTs).filter(t => t != null);
       if (ts.length >= 2 && ts.length === (c.members || []).length) {
         const span = Math.max(...ts) - Math.min(...ts);
@@ -1848,7 +1907,7 @@ function holderGroupsLine(clusters) {
       const o = ownerById.get(addr), n = nodeById.get(addr);
       if (!o || !n) return '';
       const rank = rankOf(o), pct = +o.pct || 0, ci = n.clusterIndex;
-      const head = `<div class="hm-drawer__h"><span class="hm-letter">${ci >= 0 ? CLUSTER_LETTERS[ci] : '#'}</span><div class="t"><b>wallet #${rank} &middot; ${pct.toFixed(2)}%</b><span>${esc(truncAddr(addr))}${o.kind ? ` &middot; ${esc(o.kind)}` : ''}${o.team ? ' &middot; team supply' : ''}</span></div><button type="button" class="holder-map-chip" data-hm="close">close</button></div>`;
+      const head = `<div class="hm-drawer__h"><span class="hm-letter">${ci >= 0 ? CLUSTER_LETTERS[ci] : '#'}</span><div class="t"><b>wallet #${rank} &middot; ${pct.toFixed(2)}%</b><span>${esc(truncAddr(addr))}${o.label ? ` &middot; ${esc(o.label)}` : ''}${o.kind ? ` &middot; ${esc(o.kind)}` : ''}${o.exchange ? ' &middot; exchange' : ''}${o.team ? ' &middot; team supply' : ''}</span></div><button type="button" class="holder-map-chip" data-hm="close">close</button></div>`;
       const kv = [];
       if (market.mcap > 0) {
         const value = pct / 100 * market.mcap;
@@ -1861,6 +1920,10 @@ function holderGroupsLine(clusters) {
       const roles = (n.roles || []).map(r => ROLE_WORDS[r] || r);
       kv.push(['roles', roles.length ? esc(roles.join(', ')) : 'none flagged']);
       if (n.fundTs) kv.push(['funded', `${esc(fmtSpan(Math.max(0, Date.now() / 1000 - n.fundTs)))} ago`]);
+      if (o.funder) {
+        const by = o.funding_kind === 'first-tx' ? 'first transaction with' : o.funding_kind === 'token' ? `sent it ${esc(tokenSym)}` : `sent it ${esc(nativeSym)}`;
+        kv.push(['funded by', `${addrHtml(o.funder)} <span class="hm-who">${by}</span> ${bsLink('tx', o.fund_tx, 'tx&nbsp;&nearr;', 'hm-bs--tx')}`]);
+      }
       const wired = (neighbours.get(addr) || new Set()).size;
       const fc = fundedCount.get(addr) || 0, sc = sentCount.get(addr) || 0;
       const ties = [wired ? `${wired} linked wallet${wired > 1 ? 's' : ''}` : null,
@@ -1871,6 +1934,7 @@ function holderGroupsLine(clusters) {
       const acts = `<div class="hm-wcard__acts">
         ${canOpen ? `<button type="button" class="holder-map-chip hm-wcard__open" data-hm="wallet-open" data-addr="${esc(addr)}">open wallet &rarr;</button>` : ''}
         ${ci >= 0 ? `<button type="button" class="holder-map-chip" data-hm="cluster" data-idx="${ci}">cluster ${CLUSTER_LETTERS[ci]}</button>` : ''}
+        ${bsLink('address', addr, 'open in Blockscout &nearr;', 'holder-map-chip')}
         <button type="button" class="holder-map-chip" data-hm="copy" data-addr="${esc(addr)}">copy</button>
         <button type="button" class="holder-map-chip chip--dash" data-hm="hide" data-addr="${esc(addr)}">hide</button>
       </div>`;
@@ -1892,7 +1956,7 @@ function holderGroupsLine(clusters) {
       if (!c) return;
       const letter = CLUSTER_LETTERS[selected];
       const allOff = (c.members || []).every(m => S.hidden.has(m));
-      const head = `<div class="hm-drawer__h"><span class="hm-letter">${letter}</span><div class="t"><b>cluster ${letter} &middot; ${(+c.pct || 0).toFixed(1)}%</b><span>${c.wallets} wallets${c.owner ? ` &middot; ${esc(c.owner_label || 'team')}` : ''} &middot; ${esc(c.reason || '')}${c.evidence === 'weak' ? ' &middot; weak' : ''}</span></div><button type="button" class="holder-map-chip" data-hm="close">close</button></div>`;
+      const head = `<div class="hm-drawer__h"><span class="hm-letter">${letter}</span><div class="t"><b>cluster ${letter} &middot; ${(+c.pct || 0).toFixed(1)}%</b><span>${c.wallets} wallets${c.owner ? ` &middot; ${esc(c.owner_label || 'team')}` : c.label ? ` &middot; ${esc(c.label)}` : ''} &middot; ${esc(c.reason || '')}${c.evidence === 'weak' ? ' &middot; weak' : ''}</span></div><button type="button" class="holder-map-chip" data-hm="close">close</button></div>`;
       const tabs = `<div class="hm-drawer__tabs">${['wallets', 'evidence', 'impact'].map(t =>
         `<button type="button" class="holder-map-chip${S.dtab === t ? ' on' : ''}" data-hm="dtab" data-tab="${t}" aria-pressed="${S.dtab === t}">${t}</button>`).join('')}<span class="sp"></span><button type="button" class="holder-map-chip chip--dash" data-hm="${allOff ? 'showall' : 'hideall'}" data-idx="${selected}">${allOff ? 'show all' : 'hide all'}</button></div>`;
       let body;

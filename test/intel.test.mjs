@@ -27,6 +27,7 @@ function chainFetch() {
     [(u) => u.searchParams.get('action') === 'getLogs', json({ status: '1', message: 'OK', result: [
       xfer(dev, pool, 500, 50, 600), xfer(pool, h1, 100, 51, 700), xfer(pool, h4, 50, 52, 720), xfer(pool, H('8'), 1, 90, 9000),
     ] })],
+    [(u) => u.pathname === '/v2/api' && u.searchParams.get('action') === 'tokentx', json({ status: '0', message: 'No token transfers found', result: [] })],
     [(u) => u.pathname === '/v2/api', (u) => json({ status: '1', message: 'OK', result: txOf[u.searchParams.get('address')] ?? [] })],
     [(u) => u.pathname.endsWith('/holders'), json({ items: [
       { value: '300', address: { hash: pool, is_contract: true, name: 'UniswapV2Pair' } },
@@ -76,8 +77,9 @@ test('full: clusters, links, roles and launch signals from Blockscout', async ()
   assert.equal(d.deployer, dev);
   assert.equal(d.dev_found, false);
   assert.deepEqual(d.clusters, [{ pct: 27, wallets: 2, reason: 'shared funder', members: [h1, h2], funder: s,
-    funder_is_holder: false, evidence: 'strong', weak_reason: null, owner: null, owner_label: null }]);
-  assert.deepEqual(d.links, [{ source: h1, target: h2, kind: 'shared_funder' }]);
+    funder_is_holder: false, funder_label: null, evidence: 'strong', weak_reason: null, owner: null, owner_label: null,
+    label: null, label_from: null, exchange: false, token_linked: false }]);
+  assert.deepEqual(d.links, [{ source: h1, target: h2, kind: 'shared_funder', reason: 'shared funder', via: s }]);
   assert.equal(d.bubble_risk, 'High');
   assert.equal(d.top_owners.find((o) => o.address === h1).fund_ts, 1000);
   assert.ok(d.blockscout_calls > 0);

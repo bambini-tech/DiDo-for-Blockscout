@@ -429,9 +429,11 @@ async function planChains(client: BlockscoutClient, address: string, chains: rea
   const indexed = await aggregatorChains(client);
   if (!indexed) return { read: all, info: { via: 'probe', probed: all.size, reason: `aggregator chain list unavailable (${aggregatorError() ?? 'error'})` } };
   const covered = chains.filter((c) => indexed.has(c.chainId)).map((c) => c.chainId);
-  const present = await chainsWithAddress(client, address, covered);
+  const found = await chainsWithAddress(client, address);
+  const present = found ? new Set([...found].filter((id) => all.has(id))) : null;
   if (!present) return { read: all, info: { via: 'probe', probed: all.size, reason: `aggregator lookup failed (${lookupError() ?? 'error'})` } };
-  const uncovered = chains.filter((c) => !indexed.has(c.chainId)).map((c) => c.chainId);
-  const read = new Set([...present, ...uncovered].filter((id) => all.has(id)));
-  return { read, info: { via: 'multichain', found_on: present.size, probed: uncovered.length, skipped: covered.length - present.size } };
+  // Chains outside the cluster are probed unless the search already placed the wallet there.
+  const uncovered = chains.filter((c) => !indexed.has(c.chainId) && !present.has(c.chainId)).map((c) => c.chainId);
+  const read = new Set([...present, ...uncovered]);
+  return { read, info: { via: 'multichain', found_on: present.size, probed: uncovered.length, skipped: covered.filter((id) => !present.has(id)).length } };
 }

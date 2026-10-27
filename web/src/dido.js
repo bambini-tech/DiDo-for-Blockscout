@@ -1214,6 +1214,9 @@
     const nl = (info.links || []).length;
     const linksChip = `<button type="button" class="dd-trail__ca dd-trail__links${nl ? '' : ' is-none'}" data-links aria-haspopup="dialog" aria-expanded="false" title="${nl ? `the project's links (${nl}) · L` : 'no links listed · L'}" aria-label="${nl ? `the project's ${nl} links` : 'no links listed'}">${GLYPH.link}<span class="dd-trail__n">${nl}</span></button>`;
     if (info.address) bits.push(`<button type="button" class="dd-trail__ca" data-ca="${esc(info.address)}" title="copy the contract address" aria-label="copy the contract address ${esc(info.address)}">${GLYPH.copy}</button>`);
+    /* The token at its source: its Blockscout page, one click from the pill. */
+    const bs = info.address && EXPLORERS[String(info.chain || '').toLowerCase()];
+    if (bs) bits.push(`<a class="dd-trail__ca dd-trail__bs" href="${esc(`${bs}/token/${info.address}`)}" target="_blank" rel="noopener" title="open this token in Blockscout">Blockscout&nbsp;&nearr;</a>`);
     bits.push(linksChip);
     els.trail.innerHTML = bits.join('');
     const mark = els.trail.querySelector('[data-logo]');
@@ -3293,6 +3296,12 @@
         h.native ? 'gas coin' : p != null ? `${pctTxt(p)} vs cost` : (w.pnl_pending ? 'cost basis loading' : 'no cost basis'),
         (chain && chain.chain_name) || h.chain_label || DD.chainTag(h.chain)];
       const item = (act, label) => `<button type="button" role="menuitem" class="hm-ctx__i" data-hm="${act}">${label}</button>`;
+      /* A token's Blockscout page; a gas coin's is the wallet's own page on that chain. */
+      const bsOf = x => {
+        const base = EXPLORERS[String(x.chain || '').toLowerCase()];
+        if (!base) return '';
+        return x.native ? `${base}/address/${w.address || ''}` : (x.address ? `${base}/token/${x.address}` : '');
+      };
       el.innerHTML = `<div class="hm-ctx__h"><b>${rank >= 0 ? `#${rank + 1} &middot; ` : ''}${share.toFixed(2)}%</b><span>${esc(h.symbol)} · ${h.native ? 'native' : esc(short(String(h.address || '')))}</span></div>`
         + `<div class="hm-ctx__f">${facts.map(esc).join(' &middot; ')}</div><div class="hm-ctx__m">`
         + (scans ? item('token-open', 'scan token <span>&rarr;</span>')
@@ -3300,6 +3309,7 @@
         + item('pick', WALLET.picked === key ? 'clear details' : 'details')
         + (chain ? item('chain', `${WALLET.filter === h.chain ? 'every chain' : `chain ${esc(chain.chain_label)}`} <span>${(w.total_usd > 0 ? chain.total_usd / w.total_usd * 100 : 0).toFixed(1)}%</span>`) : '')
         + (h.native ? '' : item('copy', 'copy contract'))
+        + (bsOf(h) ? `<a role="menuitem" class="hm-ctx__i" href="${esc(bsOf(h))}" target="_blank" rel="noopener">open in Blockscout <span>&nearr;</span></a>` : '')
         + '</div>';
       on = { h, anchor };
       el.hidden = false;

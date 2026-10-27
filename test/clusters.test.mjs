@@ -23,7 +23,7 @@ test('shared funder links holders when the sender is not infrastructure', () => 
     trace(H3, [inflow(X, 3, 99, 99999)]),
   ], { txCounts: { [S]: 40 } });
   assert.equal(r.clusters.length, 1);
-  assert.deepEqual(r.clusters[0], { id: 1, members: [H1, H2], share: 15, reasons: ['shared funder'] });
+  assert.deepEqual(r.clusters[0], { id: 1, members: [H1, H2], share: 15, reasons: ['shared funder'], tokenLinked: false });
   assert.equal(r.wallets[H1].cluster, 1);
   assert.equal(r.wallets[H3].cluster, null);
   assert.deepEqual(r.links, [{ a: H1, b: H2, reason: 'shared funder', via: S }]);

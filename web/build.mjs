@@ -2,10 +2,12 @@
  * Build the DiDo page into dist/web/.
  *
  * Inputs, all inside this repo:
- *   web/src/          DiDo's page, stylesheet and app script
- *   web/vendor/       the analysis engine, the holder map (JS + CSS), the
- *                     brand mark and ENGINE_VERSION -- a snapshot taken from
- *                     DigitalDon (see web/vendor/SOURCE.md). Not edited here.
+ *   web/src/          DiDo's page, stylesheet and app script, and the holder
+ *                     map (JS + CSS): this edition's own fork of DigitalDon's,
+ *                     with Blockscout labels and explorer links
+ *   web/vendor/       the analysis engine, the brand mark and ENGINE_VERSION --
+ *                     a snapshot taken from DigitalDon (see web/vendor/SOURCE.md).
+ *                     Not edited here.
  *
  * Output (dist/web/, gitignored):
  *   index.html    the page; CSS and JS linked, never inline, so the server can
@@ -38,21 +40,21 @@ const BUILT_AT = new Date().toISOString();
 if (!/^\d+\.\d+\.\d+$/.test(VERSION)) die(`VERSION must be X.Y.Z, got "${VERSION}"`);
 
 const engine = read(VENDOR, 'engine.js');
-const holderJs = read(VENDOR, 'holdermap.js');
-const holderCss = read(VENDOR, 'holdermap.css');
+const holderJs = read(SRC, 'holdermap.js');
+const holderCss = read(SRC, 'holdermap.css');
 // The chains, from the one list the server reads too.
 const CHAINS = JSON.parse(readFileSync(join(ROOT, 'data', 'chains.json'), 'utf8')).chains
   .map(({ key, name, label, code, gt, explorer }) => ({ key, name, label, code, gt, explorer }));
 if (!CHAINS.length || !CHAINS.some((c) => c.key === 'ethereum')) die('data/chains.json has no chains (or no ethereum)');
 if (!engine.startsWith('/*ENGINE-START*/') || !engine.trimEnd().endsWith('/*ENGINE-END*/')) die('vendor/engine.js lost its markers');
 for (const fn of ['holderFullSectionHtml', 'initHolderMap', 'holderGroupsLine']) {
-  if (!holderJs.includes(`function ${fn}`)) die(`vendor/holdermap.js is missing ${fn}()`);
+  if (!holderJs.includes(`function ${fn}`)) die(`src/holdermap.js is missing ${fn}()`);
 }
 // The map may use only `esc` and `DD` from its host; it must at least parse with those.
 try {
   new Function('esc', 'DD', holderJs);
 } catch (e) {
-  die(`vendor/holdermap.js does not parse: ${e.message}`);
+  die(`src/holdermap.js does not parse: ${e.message}`);
 }
 
 // The brand mark, inlined: bare paths inheriting currentColor (the brand is monochrome).
@@ -81,7 +83,10 @@ const banner = `/* DiDo for Blockscout v${VERSION} -- analysis engine ENGINE_VER
 // One IIFE: the engine declares `const DD` at its top level; the app is its own
 // strict-mode function receiving DD, with the holder map stamped inside it.
 const js = banner + '(function () {\n' + engine + '\n/* ---- dido app ---- */\n' + stamp(read(SRC, 'dido.js')) + '\n})();\n';
-if (!js.includes(engine) || !js.includes(holderJs)) die('a vendored block was altered during bundling');
+if (!js.includes(engine)) die('the vendored engine was altered during bundling');
+if (!js.includes(holderJs)) die('the holder map was altered during bundling');
+// The page ships under style-src 'self': an inline style attribute would be dropped.
+if (/\sstyle="/.test(holderJs)) die('src/holdermap.js emits an inline style attribute');
 const css = stamp(read(SRC, 'dido.css'));
 if (!css.includes(holderCss)) die('holder-map CSS was altered during bundling');
 const html = stamp(read(SRC, 'dido.html'));

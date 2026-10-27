@@ -19,9 +19,16 @@
  * bridge): "both came through Coinbase" says nothing, "Coinbase paid both in
  * one block" is a batch someone sent.
  *
- * Who never links on native coin:
+ * Every rule runs twice: on native coin, and on the mapped token itself. A
+ * treasury that hands supply to five multisigs within minutes never sends
+ * them ETH, but it sends them the token, and that is the same operator. Token
+ * links leave out exchange wallets (Blockscout tags them) and holders paid the
+ * token by many senders: a user who withdrew from Binance is not Binance.
+ *
+ * Who never links:
  *   - named contracts (pools, routers, lockers): they hold supply, but nobody
- *     "funds" a pool the way an operator funds a wallet;
+ *     "funds" a pool the way an operator funds a wallet. A contract that IS a
+ *     wallet (a Safe, a multisig) links like one;
  *   - sinks: a holder paid by many different senders is a deposit address or a
  *     treasury, and would wire every one of them together.
  *
@@ -70,6 +77,12 @@ export interface HolderIn {
   share: number | null;
   isContract: boolean;
   name: string | null;
+  /** Blockscout tags it as an exchange wallet. */
+  exchange?: boolean;
+  /** A contract that is a wallet (Safe, multisig, smart account). */
+  wallet?: boolean;
+  /** Its token balance (raw units): token movements far smaller than it are noise, not funding. */
+  raw?: string;
 }
 
 export interface LinkInput {
@@ -78,6 +91,8 @@ export interface LinkInput {
   traces: Map<string, FundingTrace>;
   /** Lifetime tx counts of shared senders; null = could not be read. */
   txCounts: Map<string, number | null>;
+  /** The mapped token's decimals: what makes a token amount "round". */
+  tokenDecimals?: number;
   options?: Partial<LinkOptions>;
 }
 
@@ -87,6 +102,12 @@ export interface Link {
   reason: Reason;
   /** The sender behind a funding link. */
   via?: string;
+  /** The transaction that is the evidence (for a group link: the one that paid `b`). */
+  tx?: string;
+  /** For a group link, the transaction that paid `a` from the same sender. */
+  txA?: string;
+  /** The link is on the mapped token, not native coin. */
+  asset?: 'token';
 }
 
 export interface Cluster {
@@ -94,6 +115,8 @@ export interface Cluster {
   members: string[];
   share: number;
   reasons: Reason[];
+  /** Some of its links are on the mapped token itself. */
+  tokenLinked: boolean;
 }
 
 export interface WalletInfo {
@@ -102,6 +125,8 @@ export interface WalletInfo {
   /** First activity and first funding inflow (unix seconds), for the funding replay. */
   firstTs: number | null;
   fundTs: number | null;
+  /** The transaction that funded it: what "funded by" opens on Blockscout. */
+  fundTx: string | null;
   /** Fewer than `freshMaxTxs` plain transactions in the wallet's whole history. */
   fresh: boolean;
   trace: 'ok' | 'error' | 'skipped';
@@ -139,8 +164,9 @@ export function sharedSenders(holders: HolderIn[], traces: Map<string, FundingTr
   const count = new Map<string, number>();
   for (const h of holders) {
     const t = traces.get(h.address);
-    if (!t || t.status !== 'ok') continue;
-    for (const s of new Set(inflows(t).map((f) => f.peer))) {
+    if (!t) continue;
+    const flows = [...(t.status === 'ok' ? inflows(t) : []), ...(h.exchange ? [] : tokenInflows(t))];
+    for (const s of new Set(flows.map((f) => f.peer))) {
       if (!members.has(s)) count.set(s, (count.get(s) ?? 0) + 1);
     }
   }
@@ -152,89 +178,120 @@ export function linkHolders(input: LinkInput): LinkResult {
   const creator = input.creator?.toLowerCase() ?? null;
   const shareOf = new Map(input.holders.map((h) => [h.address, h.share ?? 0]));
   const isHolder = (a: string) => shareOf.has(a);
+  const tokenUnit = 10n ** BigInt(Math.max(0, (input.tokenDecimals ?? 18) - 4));
 
   const wallets: Record<string, WalletInfo> = {};
   const linkable: string[] = [];
+  const tokenLinkable: string[] = [];
+  // Token movements that count: at least 1% of what the holder holds now.
+  // Spam drops ("visit … to claim your rewards") and 1-token test sends land
+  // on every big holder; they say nothing about who owns it.
+  const tokenFlowsOf = new Map<string, Flow[]>();
   for (const h of input.holders) {
     const t = input.traces.get(h.address);
-    const senders = new Set(t ? inflows(t).map((f) => f.peer) : []);
-    const sink = senders.size >= opt.sinkMinSenders;
-    const funding = t ? inflows(t).find((f) => f.peer === t.funder) : undefined;
+    if (!t?.tokenFlows) continue;
+    const floor = BigInt(h.raw ?? '0') / 100n;
+    tokenFlowsOf.set(h.address, t.tokenFlows.filter((f) => BigInt(f.value) >= floor));
+  }
+  for (const h of input.holders) {
+    const t = input.traces.get(h.address);
+    const native = t && t.status === 'ok' ? inflows(t) : [];
+    const token = (tokenFlowsOf.get(h.address) ?? []).filter((f) => f.dir === 'in');
+    const sink = new Set(native.map((f) => f.peer)).size >= opt.sinkMinSenders;
+    const tokenSink = new Set(token.map((f) => f.peer)).size >= opt.sinkMinSenders;
+    // Who funded it: native coin first (where the wallet came from); a wallet
+    // never paid native coin (a multisig) was funded by whoever sent it the token.
+    const nativeFunding = t ? native.find((f) => f.peer === t.funder) : undefined;
+    const byToken = (!t?.funder || t.kind === 'first-tx') && token.length > 0 ? token[0]! : undefined;
     wallets[h.address] = {
-      funder: t?.funder ?? null,
-      fundingKind: t?.kind ?? null,
-      firstTs: t?.firstTs ?? null,
-      fundTs: funding?.ts ?? null,
-      fresh: Boolean(t && t.status === 'ok' && !t.windowFull && t.txCount < opt.freshMaxTxs),
-      trace: !t ? 'skipped' : t.status === 'ok' ? 'ok' : 'error',
+      funder: byToken?.peer ?? t?.funder ?? null,
+      fundingKind: byToken ? 'token' : t?.kind ?? null,
+      firstTs: t?.firstTs ?? byToken?.ts ?? null,
+      fundTs: byToken?.ts ?? nativeFunding?.ts ?? null,
+      fundTx: byToken?.hash ?? nativeFunding?.hash ?? null,
+      // A contract (a multisig) sends few transactions by design: "fresh" is a wallet's word.
+      fresh: Boolean(!h.isContract && t && t.status === 'ok' && !t.windowFull && t.txCount < opt.freshMaxTxs),
+      trace: !t ? 'skipped' : t.status === 'ok' || t.tokenFlows ? 'ok' : 'error',
       ...(t?.error ? { traceError: t.error } : {}),
       cluster: null,
       deployer: h.address === creator,
-      deployerFunded: Boolean(creator && senders.has(creator)),
+      deployerFunded: Boolean(creator && h.address !== creator && [...native, ...token].some((f) => f.peer === creator)),
       sink,
     };
-    const namedContract = h.isContract && Boolean(h.name);
-    if (t?.status === 'ok' && !sink && !namedContract) linkable.push(h.address);
+    const namedContract = h.isContract && Boolean(h.name) && !h.wallet;
+    if (namedContract) continue;
+    if (t?.status === 'ok' && !sink) linkable.push(h.address);
+    if (t?.tokenFlows && !tokenSink && !h.exchange) tokenLinkable.push(h.address);
   }
   const canLink = new Set(linkable);
+  const canLinkToken = new Set(tokenLinkable);
 
   const uf = new UnionFind();
   const links: Link[] = [];
   const reasonsOf = new Map<string, Set<Reason>>();
+  const tokenLinked = new Set<string>();
   const seenPair = new Set<string>();
-  const join = (a: string, b: string, reason: Reason, via?: string) => {
+  const join = (a: string, b: string, reason: Reason, extra: { via?: string; tx?: string | null; txA?: string | null; token?: boolean } = {}) => {
     if (a === b) return;
-    const key = `${a < b ? a : b}|${a < b ? b : a}|${reason}`;
+    const key = `${a < b ? a : b}|${a < b ? b : a}|${reason}|${extra.token ? 't' : 'n'}`;
     if (seenPair.has(key)) return;
     seenPair.add(key);
     uf.union(a, b);
-    links.push(via ? { a, b, reason, via } : { a, b, reason });
+    links.push({ a, b, reason, ...(extra.via ? { via: extra.via } : {}), ...(extra.tx ? { tx: extra.tx } : {}), ...(extra.txA ? { txA: extra.txA } : {}), ...(extra.token ? { asset: 'token' as const } : {}) });
     for (const x of [a, b]) {
       if (!reasonsOf.has(x)) reasonsOf.set(x, new Set());
       reasonsOf.get(x)!.add(reason);
+      if (extra.token) tokenLinked.add(x);
     }
   };
   /** Star-link a group to its largest holder, so the map draws k-1 lines, not k². */
-  const joinGroup = (group: string[], reason: Reason, via?: string) => {
+  const joinGroup = (group: string[], reason: Reason, via: string, per: Map<string, Flow[]>, token: boolean) => {
     const sorted = [...group].sort((x, y) => (shareOf.get(y) ?? 0) - (shareOf.get(x) ?? 0) || cmp(x, y));
-    for (const m of sorted.slice(1)) join(sorted[0]!, m, reason, via);
+    const txA = per.get(sorted[0]!)?.[0]?.hash ?? null;
+    for (const m of sorted.slice(1)) join(sorted[0]!, m, reason, { via, tx: per.get(m)?.[0]?.hash ?? null, txA, token });
   };
 
-  // Direct native transfers between two members, either direction.
-  for (const a of linkable) {
-    for (const f of input.traces.get(a)!.flows) {
-      if (canLink.has(f.peer)) join(a, f.peer, 'direct transfer');
-    }
-  }
-
-  // Inflows from outside senders: sender -> member -> events.
-  const bySender = new Map<string, Map<string, Flow[]>>();
-  for (const m of linkable) {
-    for (const f of inflows(input.traces.get(m)!)) {
-      if (isHolder(f.peer) && f.peer !== creator) continue; // holder->holder is a direct transfer
-      if (!bySender.has(f.peer)) bySender.set(f.peer, new Map());
-      const per = bySender.get(f.peer)!;
-      if (!per.has(m)) per.set(m, []);
-      per.get(m)!.push(f);
-    }
-  }
-
   const senders: Sender[] = [];
-  for (const [sender, per] of [...bySender].sort(([x], [y]) => cmp(x, y))) {
-    const members = [...per.keys()];
-    if (sender === creator) {
-      // The deployer is never "infrastructure" for its own token.
-      if (canLink.has(creator)) for (const m of members) join(creator, m, 'funded by deployer', creator);
-      else if (members.length >= 2) joinGroup(members, 'funded by deployer', creator);
-      continue;
+  const passes: Array<{ token: boolean; members: string[]; can: Set<string>; flowsOf: (t: FundingTrace) => Flow[]; unit: bigint }> = [
+    { token: false, members: linkable, can: canLink, flowsOf: (t) => t.flows, unit: 100_000_000_000_000n },
+    { token: true, members: tokenLinkable, can: canLinkToken, flowsOf: (t) => tokenFlowsOf.get(t.wallet) ?? [], unit: tokenUnit },
+  ];
+  for (const pass of passes) {
+    // Direct transfers between two members, either direction.
+    for (const a of pass.members) {
+      for (const f of pass.flowsOf(input.traces.get(a)!)) {
+        if (pass.can.has(f.peer)) join(a, f.peer, 'direct transfer', { tx: f.hash, token: pass.token });
+      }
     }
-    if (members.length < 2) continue;
-    const txCount = input.txCounts.has(sender) ? input.txCounts.get(sender)! : null;
-    // Unknown counts as infrastructure: we only claim a shared-funder cluster we could check.
-    const infrastructure = txCount === null ? null : txCount >= opt.infraMinTxs;
-    senders.push({ address: sender, funded: members.length, txCount, infrastructure });
-    if (infrastructure === false) joinGroup(members, 'shared funder', sender);
-    for (const [reason, group] of fingerprints(per, opt)) joinGroup(group, reason, sender);
+
+    // Inflows from outside senders: sender -> member -> events.
+    const bySender = new Map<string, Map<string, Flow[]>>();
+    for (const m of pass.members) {
+      for (const f of pass.flowsOf(input.traces.get(m)!).filter((x) => x.dir === 'in')) {
+        if (isHolder(f.peer) && f.peer !== creator) continue; // holder->holder is a direct transfer
+        if (!bySender.has(f.peer)) bySender.set(f.peer, new Map());
+        const per = bySender.get(f.peer)!;
+        if (!per.has(m)) per.set(m, []);
+        per.get(m)!.push(f);
+      }
+    }
+
+    for (const [sender, per] of [...bySender].sort(([x], [y]) => cmp(x, y))) {
+      const members = [...per.keys()];
+      if (sender === creator) {
+        // The deployer is never "infrastructure" for its own token.
+        if (pass.can.has(creator)) for (const m of members) join(creator, m, 'funded by deployer', { via: creator, tx: per.get(m)?.[0]?.hash ?? null, token: pass.token });
+        else if (members.length >= 2) joinGroup(members, 'funded by deployer', creator, per, pass.token);
+        continue;
+      }
+      if (members.length < 2) continue;
+      const txCount = input.txCounts.has(sender) ? input.txCounts.get(sender)! : null;
+      // Unknown counts as infrastructure: we only claim a shared-funder cluster we could check.
+      const infrastructure = txCount === null ? null : txCount >= opt.infraMinTxs;
+      if (!senders.some((x) => x.address === sender)) senders.push({ address: sender, funded: members.length, txCount, infrastructure });
+      if (infrastructure === false) joinGroup(members, 'shared funder', sender, per, pass.token);
+      for (const [reason, group] of fingerprints(per, opt, pass.unit)) joinGroup(group, reason, sender, per, pass.token);
+    }
   }
 
   // Clusters: connected components of two or more.
@@ -254,6 +311,7 @@ export function linkHolders(input: LinkInput): LinkResult {
         members: members.sort((x, y) => (shareOf.get(y) ?? 0) - (shareOf.get(x) ?? 0) || cmp(x, y)),
         share: round4(members.reduce((s, m) => s + (shareOf.get(m) ?? 0), 0)),
         reasons: REASONS.filter((r) => reasons.has(r)),
+        tokenLinked: members.some((m) => tokenLinked.has(m)),
       };
     })
     .sort((x, y) => y.share - x.share || y.members.length - x.members.length || cmp(x.members[0]!, y.members[0]!));
@@ -284,8 +342,12 @@ function inflows(t: FundingTrace): Flow[] {
   return t.flows.filter((f) => f.dir === 'in');
 }
 
+function tokenInflows(t: FundingTrace): Flow[] {
+  return (t.tokenFlows ?? []).filter((f) => f.dir === 'in');
+}
+
 /** Same block, identical amount, funded within the window -- per sender. */
-function fingerprints(per: Map<string, Flow[]>, opt: LinkOptions): Array<[Reason, string[]]> {
+function fingerprints(per: Map<string, Flow[]>, opt: LinkOptions, unit: bigint): Array<[Reason, string[]]> {
   const out: Array<[Reason, string[]]> = [];
   const bucket = (key: (f: Flow) => string | null, reason: Reason, min: number) => {
     const groups = new Map<string, Set<string>>();
@@ -300,7 +362,7 @@ function fingerprints(per: Map<string, Flow[]>, opt: LinkOptions): Array<[Reason
     for (const g of groups.values()) if (g.size >= Math.max(2, min)) out.push([reason, [...g].sort()]);
   };
   bucket((f) => (f.block === null ? null : String(f.block)), 'same block', opt.sameBlockMin);
-  bucket((f) => (isRound(f.value) ? null : f.value), 'identical amounts', opt.sameAmountMin);
+  bucket((f) => (isRound(f.value, unit) ? null : f.value), 'identical amounts', opt.sameAmountMin);
 
   // Time windows are anchored on their first event and never chained, so a
   // sender paying strangers all day gives many small groups, not one big one.
@@ -345,10 +407,10 @@ class UnionFind {
   }
 }
 
-/** Whole multiples of 0.0001 of the native coin (10^14 wei) are round. */
-export function isRound(wei: string): boolean {
+/** Whole multiples of 0.0001 of the coin (10^14 wei for an 18-decimal one) are round. */
+export function isRound(wei: string, unit = 100_000_000_000_000n): boolean {
   try {
-    return BigInt(wei) % 100_000_000_000_000n === 0n;
+    return BigInt(wei) % unit === 0n;
   } catch {
     return false;
   }

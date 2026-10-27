@@ -12,8 +12,9 @@ separate from DigitalDon's private monorepo and from the DiDo that ships
 there (which has its own backend and trading). Nothing here is read by
 DigitalDon and nothing flows back automatically.
 
-Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page,
-`web/vendor/` DigitalDon's engine and holder map, `web/build.mjs` the bundle.
+Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page and
+this edition's holder map, `web/vendor/` DigitalDon's analysis engine,
+`web/build.mjs` the bundle.
 
 ## Rules
 
@@ -27,9 +28,17 @@ Layout: `src/` the server (Fastify, TypeScript), `web/src/` the DiDo page,
   entry board and for pricing wallet tokens Blockscout has no rate for
   (`src/market/`, paced, 429 backoff). Never read holders,
   wallets or token info anywhere else, and add no other provider.
-- **`web/vendor/` is never edited here.** It is a byte-for-byte snapshot
-  (`web/vendor/SOURCE.md`); the build and `test/web.test.mjs` check it.
-  Adapt DiDo in `web/src/`.
+- **`web/vendor/` is never edited here.** It is a byte-for-byte snapshot of
+  the analysis engine (`web/vendor/SOURCE.md`); the build and
+  `test/web.test.mjs` check it. Adapt DiDo in `web/src/`.
+- **The holder map is this edition's own** (`web/src/holdermap.js`, forked in
+  Sprint 2 for Blockscout labels and explorer links). It may use only `esc`
+  and `DD` from its host and never emits an inline `style` attribute (the
+  build and tests check both).
+- **Every claim opens in Blockscout.** An address, transaction or token the
+  page shows links to its chain's Blockscout explorer; a new surface adds the
+  link with it. Labels come from Blockscout's own name and tags, never guessed
+  (`src/labels.ts`).
 - **Chains live in `data/chains.json` only.** The server, board, wallet scan
   and page (stamped by `web/build.mjs`) all read it; never hand-keep a chain
   list anywhere else. A chain is added only when it is a Blockscout PRO API

@@ -34,7 +34,8 @@ export const PLANS: Record<Plan['name'], Plan> = {
 };
 
 /** The routes DiDo calls, as Blockscout prices them (all standard: 20). */
-const BUILT_IN: Record<string, number> = { default: 20 };
+/** Stands in when the published list cannot be read: the default, and the one priced route DiDo uses. */
+const BUILT_IN: Record<string, number> = { default: 20, 'multichain/api/v1/clusters/{cluster_id}/search/addresses': 120 };
 
 export class CreditLedger {
   private prices: Record<string, number> = { ...BUILT_IN };
@@ -68,7 +69,9 @@ export class CreditLedger {
       .replace(/^\/\d+\//, '')
       .replace(/^\//, '')
       .replace(/0x[0-9a-fA-F]{64}/g, ':hash')
-      .replace(/0x[0-9a-fA-F]{40}/g, ':address_hash');
+      .replace(/0x[0-9a-fA-F]{40}/g, ':address_hash')
+      // The aggregator's cluster routes are priced per template: clusters/{cluster_id}/...
+      .replace(/^(multichain\/api\/v1\/clusters)\/[^/]+\//, '$1/{cluster_id}/');
     return this.prices[route] ?? this.prices.default ?? 20;
   }
 

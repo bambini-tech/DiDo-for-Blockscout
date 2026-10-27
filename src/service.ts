@@ -12,14 +12,16 @@
 import type { Chain } from './chains.js';
 import type { BlockscoutClient } from './blockscout/client.js';
 import { getTokenHolders, getTokenMeta, type Holder, type TokenMeta } from './blockscout/tokens.js';
-import { getCreator, getTxBlock, getTxCount, traceFunding, type FundingTrace } from './blockscout/addresses.js';
+import { getCreator, getTxBlock, getTxCount, traceFunding, traceTokenFlows, getAddressLabels, type Flow, type FundingTrace } from './blockscout/addresses.js';
+import type { Status } from './blockscout/client.js';
+import { labelsOf } from './labels.js';
 import { readLaunch, type Launch } from './blockscout/launch.js';
 import { linkHolders, sharedSenders, type LinkOptions, type LinkResult } from './clusters.js';
 import { classify } from './classify.js';
 import { TtlCache } from './cache.js';
 
 export interface TokenResponse {
-  chain: Pick<Chain, 'key' | 'name' | 'chainId' | 'explorer'>;
+  chain: Pick<Chain, 'key' | 'name' | 'chainId' | 'explorer' | 'native'>;
   token: TokenMeta;
   holders: Holder[];
   partial: boolean;
@@ -33,6 +35,12 @@ export interface ClusterResponse extends TokenResponse {
   burn: string[];
   launch: Launch;
   analysis: LinkResult;
+  /**
+   * What Blockscout says about the addresses the map names that are not
+   * holders (holders carry their own name and tags): the deployer and the
+   * funders of the drawn clusters.
+   */
+  labels: Record<string, { name: string | null; tags: string[]; isContract: boolean }>;
   /** Blockscout requests this analysis cost (cache hits are free). */
   calls: number;
 }
@@ -67,9 +75,11 @@ export class Service {
   private readonly tokens: TtlCache<TokenResponse>;
   private readonly clusterCache: TtlCache<ClusterResponse>;
   private readonly traces: TtlCache<FundingTrace>;
+  private readonly tokenTraces: TtlCache<{ status: Status; flows: Flow[]; error?: string }>;
   private readonly txCounts = new TtlCache<number>(6 * 60 * MINUTE, 20_000);
   private readonly creators = new TtlCache<{ creator: string | null; creationTx: string | null }>(24 * 60 * MINUTE, 5_000);
   private readonly launches = new TtlCache<Launch>(24 * 60 * MINUTE, 5_000);
+  private readonly addressLabels = new TtlCache<{ name: string | null; tags: string[]; isContract: boolean }>(24 * 60 * MINUTE, 20_000);
   private readonly progressOf = new Map<string, Progress>();
   private readonly inflight = new Map<string, Promise<Reply<unknown>>>();
   private readonly traceLimit: number;
@@ -80,6 +90,7 @@ export class Service {
     this.tokens = new TtlCache(opts.tokenTtlMs ?? MINUTE);
     this.clusterCache = new TtlCache(opts.clusterTtlMs ?? 10 * MINUTE);
     this.traces = new TtlCache(opts.traceTtlMs ?? 30 * MINUTE, 50_000);
+    this.tokenTraces = new TtlCache(opts.traceTtlMs ?? 30 * MINUTE, 50_000);
     this.traceLimit = opts.traceLimit ?? 50;
     this.concurrency = opts.concurrency ?? 6;
     this.traceWindow = opts.traceWindow ?? 100;
@@ -102,7 +113,7 @@ export class Service {
       const holders = await getTokenHolders(this.client, chain.chainId, meta);
       if (holders.status !== 'ok') return { kind: 'error' };
       const body: TokenResponse = {
-        chain: { key: chain.key, name: chain.name, chainId: chain.chainId, explorer: chain.explorer },
+        chain: { key: chain.key, name: chain.name, chainId: chain.chainId, explorer: chain.explorer, native: chain.native },
         token: meta,
         holders: holders.holders,
         partial: holders.partial,
@@ -148,11 +159,15 @@ export class Service {
     const deployerP = this.creator(chain, address);
     const launchP = deployerP.then((d) => this.launch(chain, address, d.creationTx, pools, new Set([...burn, address, ...(d.address ? [d.address] : [])])));
     prog.phase = 'funders';
-    const [deployer, traces, launch] = await Promise.all([deployerP, this.traceHolders(chain, holders, prog), launchP]);
+    const [deployer, traces, launch] = await Promise.all([deployerP, this.traceHolders(chain, address, holders, prog), launchP]);
     prog.phase = 'linking';
     prog.pct = 92;
 
-    const linkIn = holders.map(({ address: a, share, isContract, name }) => ({ address: a, share, isContract, name }));
+    const linkIn = holders.map((h) => {
+      const { address: a, share, isContract, name, tags } = h;
+      const l = labelsOf(name, tags);
+      return { address: a, share, isContract, name, exchange: l.exchange, wallet: l.wallet, raw: h.raw };
+    });
     const shared = sharedSenders(linkIn, traces);
     const txCounts = new Map<string, number | null>();
     await mapLimit(shared, this.concurrency, async (s) => {
@@ -164,10 +179,31 @@ export class Service {
       creator: deployer.address,
       traces,
       txCounts,
+      tokenDecimals: tok.body.token.decimals,
       ...(this.opts.link ? { options: this.opts.link } : {}),
+    });
+    // Name the funders of the drawn clusters and the deployer: one cached address read each.
+    const holderSet = new Set(tok.body.holders.map((h) => h.address));
+    const named = new Set<string>();
+    if (deployer.address) named.add(deployer.address);
+    for (const c of analysis.clusters.slice(0, 5)) {
+      for (const l of analysis.links) if (l.via && c.members.includes(l.b)) named.add(l.via);
+    }
+    const labels: ClusterResponse['labels'] = {};
+    await mapLimit([...named].filter((a) => !holderSet.has(a)).slice(0, 12), this.concurrency, async (a) => {
+      const key = `${chain.key}:${a}`;
+      let hit = this.addressLabels.get(key);
+      if (!hit) {
+        const r = await getAddressLabels(this.client, chain.chainId, a);
+        if (r.status === 'error') return;
+        hit = { name: r.name, tags: r.tags, isContract: r.isContract };
+        this.addressLabels.set(key, hit);
+      }
+      labels[a] = hit;
     });
     const body: ClusterResponse = {
       ...tok.body,
+      labels,
       deployer: { address: deployer.address, status: deployer.status },
       pools: [...pools],
       burn: [...burn],
@@ -206,19 +242,28 @@ export class Service {
     return launch;
   }
 
-  private async traceHolders(chain: Chain, holders: Holder[], prog?: Progress): Promise<Map<string, FundingTrace>> {
-    // Named contracts (routers, lockers) are never linked, so never traced.
-    const targets = holders.filter((h) => !(h.isContract && h.name)).slice(0, this.traceLimit);
+  private async traceHolders(chain: Chain, token: string, holders: Holder[], prog?: Progress): Promise<Map<string, FundingTrace>> {
+    // Named contracts (routers, lockers, vaults) are never linked, so never
+    // traced; a contract that is a wallet (a Safe, a multisig) is.
+    const targets = holders.filter((h) => !(h.isContract && h.name) || labelsOf(h.name, h.tags).wallet).slice(0, this.traceLimit);
     const out = new Map<string, FundingTrace>();
     if (prog) prog.funders.total = targets.length;
     await mapLimit(targets, this.concurrency, async (h) => {
       const key = `${chain.key}:${h.address}`;
-      let t = this.traces.get(key);
-      if (!t) {
-        t = await traceFunding(this.client, chain.chainId, h.address, this.traceWindow);
-        // A full window is the wallet's oldest history: it cannot change, so it is kept a day.
-        if (t.status === 'ok') this.traces.set(key, t, t.windowFull ? DAY : undefined);
-      }
+      const tkey = `${chain.key}:${token}:${h.address}`;
+      // Native history and the token's own movements, side by side.
+      const [native, moves] = await Promise.all([
+        this.traces.get(key) ?? traceFunding(this.client, chain.chainId, h.address, this.traceWindow).then((t) => {
+          // A full window is the wallet's oldest history: it cannot change, so it is kept a day.
+          if (t.status === 'ok') this.traces.set(key, t, t.windowFull ? DAY : undefined);
+          return t;
+        }),
+        this.tokenTraces.get(tkey) ?? traceTokenFlows(this.client, chain.chainId, h.address, token, this.traceWindow).then((m) => {
+          if (m.status === 'ok') this.tokenTraces.set(tkey, m, m.flows.length >= this.traceWindow ? DAY : undefined);
+          return m;
+        }),
+      ]);
+      const t: FundingTrace = moves.status === 'ok' ? { ...native, tokenFlows: moves.flows } : { ...native, ...(moves.error ? { tokenError: moves.error } : {}) };
       out.set(h.address, t);
       if (prog) {
         prog.funders.done++;
