@@ -127,3 +127,26 @@ test('clusters: a failed trace is reported and the result is not cached', async 
   assert.equal(body.analysis.wallets[H('1')].trace, 'error');
   assert.equal((await app.inject(`/api/clusters/eth/${TOKEN}`)).headers['x-cache'], 'miss');
 });
+
+test('a slow launch read does not hold the map: it goes out without it, uncached', async () => {
+  const { Service } = await import('../dist/service.js');
+  const { chainByKey } = await import('../dist/chains.js');
+  const T = '0x' + 'a'.repeat(40), H1 = '0x' + '1'.repeat(40), P = '0x' + 'b'.repeat(40);
+  const f = scriptedFetch([
+    [(u) => u.searchParams.get('action') === 'getLogs', json({ status: '0', message: 'No records found', result: [] })],
+    [(u) => u.pathname === '/v2/api', json({ status: '0', message: 'No transactions found', result: [] })],
+    [`/tokens/${T}/holders`, json({ items: [{ address: { hash: P, is_contract: true, name: 'Uniswap V2' }, value: '500' }, { address: { hash: H1, is_contract: false }, value: '500' }] })],
+    [`/tokens/${T}`, json({ address_hash: T, symbol: 'T', name: 'T', decimals: '0', total_supply: '1000', holders_count: '2' })],
+    [`/addresses/${T}`, json({ creator_address_hash: H1, creation_transaction_hash: '0x' + 'c'.repeat(64) })],
+    ['/transactions/', json({ block_number: 10, timestamp: '1970-01-01T00:00:10Z' })],
+  ]);
+  const slowLogs = async (url) => {
+    if (new URL(String(url)).searchParams.get('action') === 'getLogs') await new Promise((r) => setTimeout(r, 200));
+    return f(url);
+  };
+  const svc = new Service(makeClient(slowLogs), { launchGraceMs: 20 });
+  const r = await svc.clusters(chainByKey('base'), T, null);
+  assert.equal(r.kind, 'ok');
+  assert.equal(r.body.launch.pending, true, 'the map went out before the launch read finished');
+  assert.equal(svc.cachedClusters(chainByKey('base'), T), undefined, 'and is not cached: the next look has the launch');
+});
