@@ -39,7 +39,7 @@ export interface AppOptions {
    */
   trustProxyHops?: number;
   /** Run the entry board (market reads on a 4-hour beat). Off in tests unless asked. */
-  board?: boolean | { market?: Market; intervalMs?: number; firstDelayMs?: number };
+  board?: boolean | { market?: Market; intervalMs?: number; firstDelayMs?: number; snapshotPath?: string | null };
 }
 
 export function buildApp(opts: AppOptions): FastifyInstance {
@@ -60,6 +60,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     board = new BoardKeeper(
       { market: b.market ?? new Market(), engine: loadEngine(), service, intervalMs: b.intervalMs ?? 4 * 3600_000 },
       (msg) => app.log.info(msg),
+      b.snapshotPath ?? null,
     );
     board.start(b.firstDelayMs ?? 5_000);
     app.addHook('onClose', async () => board?.stop());

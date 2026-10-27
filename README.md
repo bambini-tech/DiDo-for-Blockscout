@@ -272,8 +272,15 @@ Everything read and let go stays in the garden, faint, with the stage and
 the reason. A round reads at most 60 tokens' candles (`BOARD_MAX_READS`) at
 one request every 4 s, so it takes about 15 to 20 minutes; the board shows the
 last round until the next one lands. Rounds run every 4 hours, the first one
-right after the server starts, so after a deploy the start page has no board
-(and no garden) until that first round is in.
+right after the server starts. Nothing waits for a whole round: trending
+appears a few minutes in, once the pools are read, and the garden fills in as
+the engine reads tokens; the picks land when the round is done. With
+`BOARD_SNAPSHOT_PATH` set to a file on a mounted volume (on Railway: add a
+volume at `/data` and set `BOARD_SNAPSHOT_PATH=/data/board.json`, plus
+`RAILWAY_RUN_UID=0`, since Railway mounts volumes as root and the image runs
+as `node`), the last
+board is saved after every round and served again at once after a restart or
+a deploy, while the next round runs.
 
 ## How wallets get linked
 

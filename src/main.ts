@@ -32,7 +32,9 @@ const app = buildApp({
   holderIntel: Boolean(config.apiKey),
   service: { traceLimit: config.plan.traceLimit, concurrency: config.plan.concurrency },
   trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 1) || 0,
-  board: process.env.BOARD_ENABLED !== '0',
+  // BOARD_SNAPSHOT_PATH (a file on a mounted volume, e.g. /data/board.json):
+  // the last board survives restarts and deploys.
+  board: process.env.BOARD_ENABLED === '0' ? false : { snapshotPath: process.env.BOARD_SNAPSHOT_PATH || null },
   walletDiscovery: process.env.WALLET_DISCOVERY === 'probe' ? 'probe' : 'multichain',
   // DexScreener allows ~300 token lookups a minute; the board's own reads use a separate pacer.
   walletPricer: new Market({ dsPacer: new Pacer(250) }),

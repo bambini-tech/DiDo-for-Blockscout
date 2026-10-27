@@ -54,6 +54,8 @@ export interface BoardDoc {
   hot: Record<string, unknown>[];
   let_go: LetGo[];
   calls: Record<string, number>;
+  /** A round still in progress: trending and the tokens read so far, no picks yet. */
+  partial?: true;
 }
 
 interface Row {
@@ -73,6 +75,12 @@ export interface ReadDeps {
   service: Service;
   now?: () => number;
   intervalMs: number;
+  /**
+   * Called with what the round has so far: trending as soon as the pools are
+   * read (a few minutes in), then the garden as the engine reads tokens. A
+   * first round takes 20-30 minutes; the page need not stay empty for it.
+   */
+  onPartial?: (doc: BoardDoc) => void;
 }
 
 export async function readBoard(deps: ReadDeps): Promise<BoardDoc> {
@@ -146,6 +154,18 @@ export async function readBoard(deps: ReadDeps): Promise<BoardDoc> {
     else solid.push({ c, p, info });
   }
 
+  const partial = (): BoardDoc => {
+    const t = now();
+    const hotNow = [...hot].sort((a, b) => (b.heat as number) - (a.heat as number));
+    return {
+      read_at: Math.floor(t / 1000), next_at: Math.floor((t + deps.intervalMs) / 1000),
+      counts: { read: pairs.size, solid: solid.length, at_entry: 0, board: 0, near: 0, support: 0, hot: Math.min(hotNow.length, 12) },
+      board: [], near: [], support: [], hot: hotNow.slice(0, 12), let_go: [...letGo],
+      calls: { ...market.calls }, partial: true,
+    };
+  };
+  deps.onPartial?.(partial());
+
   // 3. the engine, deepest pools first, within the candle budget
   solid.sort((a, b) => (b.p.liquidity?.usd ?? 0) - (a.p.liquidity?.usd ?? 0));
   const atEntry: Array<{ row: Row }> = [];
@@ -157,6 +177,7 @@ export async function readBoard(deps: ReadDeps): Promise<BoardDoc> {
       letGo.push({ chain: c.chain, address: c.address, symbol, liq, size: sizeOf(liq), stage: 'entry', reason, measured });
     if (reads >= RULES.maxReads) { lg('not_read'); continue; }
     reads++;
+    if (reads % 10 === 0) deps.onPartial?.(partial());
     const df1 = await market.candles(p, 1, 500);
     const df4 = df1 ? await market.candles(p, 4, 300) : null;
     if (!df1 || engine.dfLen(df1) < engine.MIN_ANALYSIS_BARS) { lg('no_data'); continue; }

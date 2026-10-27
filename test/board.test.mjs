@@ -146,3 +146,26 @@ test('route: "unavailable" until the first read lands, then the board', async ()
   assert.equal(r.data.board.length, 1);
   assert.equal((await app.inject('/api/board')).json().error, 'feature_disabled', 'no keeper: no board');
 });
+
+test('a round serves what it has so far, never over a complete board; the last board survives a restart', async () => {
+  const { mkdtempSync, existsSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const pools = [pool(A('1'))];
+  const deps = () => ({ market: marketWith(pools), engine: engineFor({ [A('1')]: { score: 60, lo: 0.95, hi: 1.02, tp: 1.4 } }),
+    service: new Service(makeClient(blockscout())), intervalMs: 1, now: () => NOW });
+  const seen = [];
+  const doc = await readBoard({ ...deps(), onPartial: (d) => seen.push(d) });
+  assert.ok(seen.length >= 1, 'a partial read before the engine runs');
+  assert.equal(seen[0].partial, true);
+  assert.deepEqual(seen[0].board, [], 'no picks until the round is complete');
+  assert.ok(!doc.partial);
+
+  const file = join(mkdtempSync(join(tmpdir(), 'board-')), 'sub', 'board.json');
+  const k1 = new BoardKeeper(deps(), () => {}, file);
+  await k1.readNow();
+  assert.ok(existsSync(file), 'the complete board is saved');
+  const k2 = new BoardKeeper(deps(), () => {}, file);
+  assert.equal(k2.doc.board.length, 1, 'a restart serves the saved board at once');
+  assert.equal(k2.status().ready, true);
+});
