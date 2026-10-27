@@ -45,7 +45,9 @@ export async function getTxCount(
   chainId: number,
   address: string,
 ): Promise<{ count: number | null; status: Status }> {
-  const { data, status } = await client.rest<{ transactions_count?: string | number }>(chainId, `addresses/${address}/counters`);
+  // A count that does not come back quickly is "unknown" (no shared-funder
+  // link is claimed on it), never a reason to hold the whole map.
+  const { data, status } = await client.rest<{ transactions_count?: string | number }>(chainId, `addresses/${address}/counters`, {}, { timeoutMs: 8_000, attempts: 2 });
   if (status !== 'ok' || !data) return { count: null, status: status === 'ok' ? 'error' : status };
   const n = Number(data.transactions_count);
   return Number.isFinite(n) ? { count: n, status: 'ok' } : { count: null, status: 'error' };
@@ -239,13 +241,13 @@ export async function getAddressLabels(
     is_contract?: boolean;
     metadata?: { tags?: Array<{ name?: string; label?: string } | string> } | null;
     public_tags?: Array<{ display_name?: string; label?: string }> | null;
-  }>(chainId, `addresses/${address}`);
+  }>(chainId, `addresses/${address}`, {}, { timeoutMs: 6_000, attempts: 1 });
   if (status !== 'ok' || !data) {
-    // The address page can fail for a busy contract (a 500 that retries do
+    // The address page can fail or hang for a busy contract (a 500 that retries do
     // not cure). Whether it is a contract at all is still one light read away.
     const made = await client.etherscan<Array<{ contractAddress?: string }>>(chainId, {
       module: 'contract', action: 'getcontractcreation', contractaddresses: address,
-    });
+    }, { timeoutMs: 8_000 });
     if (made.status !== 'ok' || !Array.isArray(made.data)) return { name: null, tags: [], isContract: false, status: 'error' };
     return { name: null, tags: [], isContract: made.data.length > 0, status: 'ok' };
   }
