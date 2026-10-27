@@ -126,3 +126,24 @@ test('a payout contract never links the holders it pays on the token; on native 
   assert.ok(!n.clusters[0].reasons.includes('shared funder'));
   assert.ok(n.clusters[0].reasons.includes('same block'));
 });
+
+test('a sender that could not be identified links nobody on the token', () => {
+  const S = A('e'), hs = ['1', '2', '3'].map(A);
+  const holders = hs.map((a) => ({ address: a, share: 2, isContract: false, name: null, raw: String(1000n * E18) }));
+  const traces = new Map(hs.map((a, i) => trace(a, [tok(S, 'in', 500n * E18 + 7n, 100, 50, `0xr${i}`)])));
+  const base = { holders, creator: null, traces, txCounts: new Map([[S, 5]]), tokenDecimals: 18 };
+  assert.equal(linkHolders({ ...base, checkedSenders: new Set() }).clusters.length, 0, 'unchecked: no claim');
+  assert.equal(linkHolders({ ...base, checkedSenders: new Set([S]) }).clusters.length, 1, 'checked and not a contract: linked');
+});
+
+test('an address page that fails still says whether it is a contract', async () => {
+  const { getAddressLabels } = await import('../dist/blockscout/addresses.js');
+  const C = A('c');
+  const f = scriptedFetch([
+    [`/api/v2/addresses/${C}`, json({ message: 'Internal server error' }, 500)],
+    [(u) => u.searchParams.get('action') === 'getcontractcreation', json({ status: '1', message: 'OK', result: [{ contractAddress: C, contractCreator: A('d') }] })],
+  ]);
+  const r = await getAddressLabels(makeClient(f), 1, C);
+  assert.equal(r.status, 'ok');
+  assert.equal(r.isContract, true);
+});

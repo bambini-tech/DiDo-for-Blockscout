@@ -237,7 +237,15 @@ export async function getAddressLabels(
     metadata?: { tags?: Array<{ name?: string; label?: string } | string> } | null;
     public_tags?: Array<{ display_name?: string; label?: string }> | null;
   }>(chainId, `addresses/${address}`);
-  if (status !== 'ok' || !data) return { name: null, tags: [], isContract: false, status: status === 'ok' ? 'error' : status };
+  if (status !== 'ok' || !data) {
+    // The address page can fail for a busy contract (a 500 that retries do
+    // not cure). Whether it is a contract at all is still one light read away.
+    const made = await client.etherscan<Array<{ contractAddress?: string }>>(chainId, {
+      module: 'contract', action: 'getcontractcreation', contractaddresses: address,
+    });
+    if (made.status !== 'ok' || !Array.isArray(made.data)) return { name: null, tags: [], isContract: false, status: 'error' };
+    return { name: null, tags: [], isContract: made.data.length > 0, status: 'ok' };
+  }
   const tags = [
     ...(data.metadata?.tags ?? []).map((t) => (typeof t === 'string' ? t : t.name ?? t.label ?? '')),
     ...(data.public_tags ?? []).map((t) => t.display_name ?? t.label ?? ''),
