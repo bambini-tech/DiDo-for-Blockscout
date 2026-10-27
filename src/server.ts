@@ -26,6 +26,8 @@ export interface AppOptions {
   scansPerMinute?: number;
   /** Wallet scan chain discovery: 'multichain' (default) or 'probe'. */
   walletDiscovery?: 'multichain' | 'probe';
+  /** How long a full-stage request waits before answering `pending` (tests shorten it). */
+  fullWaitMs?: number;
   /** Prices the wallet scan's tokens that Blockscout has no rate for (DexScreener). Off unless given. */
   walletPricer?: WalletPricer | null;
   /** Fetch used for token logos (tests pass a stub). */
@@ -73,6 +75,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     client: opts.client,
     ...(opts.walletDiscovery ? { walletDiscovery: opts.walletDiscovery } : {}),
     walletPricer: opts.walletPricer ?? null,
+    ...(opts.fullWaitMs !== undefined ? { fullWaitMs: opts.fullWaitMs } : {}),
     configured: opts.holderIntel ?? true,
     ...(opts.scansPerMinute !== undefined ? { scansPerMinute: opts.scansPerMinute } : {}),
     onMapped: (chain, token, symbol, name, price) => mapped.record(chain, token, symbol, name, price),

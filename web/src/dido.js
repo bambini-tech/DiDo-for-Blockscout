@@ -80,6 +80,9 @@
      analyzer (base ~20 s, a cold cluster walk up to a minute). */
   const HOLDER_BASE_TIMEOUT_MS = 60000;
   const HOLDER_FULL_TIMEOUT_MS = 120000;
+  /* How long the page keeps asking for a cluster map that is still being
+     walked: a first look at a big token reads a few hundred Blockscout pages. */
+  const HOLDER_FULL_DEADLINE_MS = 6 * 60000;
   const HOLDER_ERRORS = {
     invalid_token: 'the token address could not be validated.',
     unsupported_chain: 'no holder map for this chain yet.',
@@ -1334,17 +1337,25 @@
        refresh. A cluster scan can outlast one wait on a fresh token; the
        server keeps it running and a second ask joins it, so ask once more
        before calling it a timeout. */
+    /* The server never holds one request for a whole walk (proxies cut long
+       requests): an unfinished walk answers `pending` and keeps running, and
+       the page asks again every few seconds -- the progress line moves
+       meanwhile -- until the map is in or HOLDER_FULL_DEADLINE_MS passes.
+       One failed ask (a dropped connection) is retried, not final. */
     const fetchFull = async stale => {
       const url = `${base}&stage=full${stale ? '&stale=1' : ''}`;
-      try {
-        try { return await fetchJsonTimeout(url, HOLDER_FULL_TIMEOUT_MS); }
-        catch (e) {
-          if (holdersRun !== me) return null;
-          return await fetchJsonTimeout(url, HOLDER_FULL_TIMEOUT_MS);
-        }
-      } catch (e) {
-        return null;
+      const until = Date.now() + HOLDER_FULL_DEADLINE_MS;
+      let misses = 0;
+      while (Date.now() < until) {
+        let json = null;
+        try { json = await fetchJsonTimeout(url, HOLDER_FULL_TIMEOUT_MS); } catch (e) { json = null; }
+        if (holdersRun !== me) return null;
+        if (json && json.error === 'pending') { misses = 0; await new Promise(r => setTimeout(r, 3000)); continue; }
+        if (json) return json;
+        if (++misses > 2) return null;
+        await new Promise(r => setTimeout(r, 2000));
       }
+      return null;
     };
     const okFull = j => !!(j && j.ok === true && j.data);
 

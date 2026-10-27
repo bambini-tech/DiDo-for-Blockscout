@@ -343,6 +343,7 @@ GET /api/token/:chain/:address                 token + top holders
 GET /api/clusters/:chain/:address              the raw analysis: traces, clusters, links, launch
 GET /api/holder-intel?token&chain&stage=base   the map's first answer (holders, LP share)
 GET /api/holder-intel?token&chain&stage=full   + clusters, links, roles, launch signals
+                                                (202 "pending" while the walk runs: ask again)
 GET /api/holder-progress?token&chain           how far a running walk has got
 GET /api/wallet-scan?address                   a wallet across every chain
 GET /api/token-tint?u=<logo url>               the token's colours, for the background

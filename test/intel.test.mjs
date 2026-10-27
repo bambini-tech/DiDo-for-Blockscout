@@ -137,3 +137,21 @@ test('behind one proxy hop, each visitor gets their own limit', async () => {
   assert.notEqual((await scan(H('7'), '2.2.2.2')).statusCode, 429, 'another visitor is not throttled by the first');
   assert.equal((await scan(H('8'), '9.9.9.9, 1.1.1.1')).statusCode, 429, 'a forged left-most address does not reset the limit');
 });
+
+test('a walk that outlasts one request answers pending, runs on, and is handed over free', async () => {
+  const f = chainFetch();
+  const slow = async (u) => { await new Promise((r) => setTimeout(r, 2)); return f(u); };
+  const a = buildApp({ client: makeClient(slow), version: 't', fullWaitMs: 5, scansPerMinute: 1 });
+  const url = `/api/holder-intel?token=${TOKEN}&chain=base&pair=${pool}&stage=full`;
+  const first = await a.inject(url);
+  assert.equal(first.statusCode, 202);
+  assert.equal(first.json().error, 'pending', 'no request is held open for a whole walk');
+  for (let i = 0; i < 200; i++) {
+    const p = (await a.inject(`/api/holder-progress?token=${TOKEN}&chain=base`)).json().data;
+    if (!p.running) break;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  const again = await a.inject(url);
+  assert.equal(again.statusCode, 200, 'asking again is not a new scan: the limit of one is not spent');
+  assert.equal(again.json().data.stage, 'full');
+});
