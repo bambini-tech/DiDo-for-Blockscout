@@ -313,6 +313,11 @@ The rules that keep the map honest:
 - **Exchanges don't swallow their users.** Wallets Blockscout tags as exchange
   wallets, and holders paid the token by 15+ different senders, never link on
   token movements: a user who withdrew from Binance is not Binance.
+- **A payout contract owns nobody.** A sender Blockscout says is a contract
+  (other than a Safe or multisig), such as staking rewards, vesting or a
+  distributor, pays many holders and owns none of them: it never links on
+  the token. On native coin it counts as infrastructure, so only a batch
+  (one block, identical odd amounts, minutes apart) links its recipients.
 - **Exchange custody is named, not judged.** A cluster whose labelled wallets
   are all exchange wallets is drawn as found, named ("Binance · exchange"),
   and left out of the bubble-risk verdict, and its evidence says so.
