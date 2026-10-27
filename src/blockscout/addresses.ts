@@ -208,9 +208,12 @@ export async function traceTokenFlows(
   window = 100,
 ): Promise<{ status: Status; flows: Flow[]; error?: string }> {
   const me = wallet.toLowerCase();
+  // A token-filtered history is a slow query on Blockscout (6-17 s on a busy
+  // token, against ~1 s for txlist): it gets a longer timeout rather than a
+  // retry, which would only start it over.
   const res = await client.etherscan<RawTx[]>(chainId, {
     module: 'account', action: 'tokentx', contractaddress: token.toLowerCase(), address: me, sort: 'asc', page: 1, offset: window,
-  });
+  }, { timeoutMs: 40_000 });
   if (res.status !== 'ok' || !Array.isArray(res.data)) return { status: 'error', flows: [], error: `tokentx: ${res.detail ?? 'unreadable'}` };
   const flows: Flow[] = [];
   for (const tx of res.data) {

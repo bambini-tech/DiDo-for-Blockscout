@@ -113,11 +113,11 @@ export class BlockscoutClient {
    * `status: "0"` with "No transactions found" is an answer -- an empty list --
    * not a failure.
    */
-  async etherscan<T>(chainId: number, params: Record<string, string | number>): Promise<Result<T>> {
+  async etherscan<T>(chainId: number, params: Record<string, string | number>, opts: { timeoutMs?: number } = {}): Promise<Result<T>> {
     const url = new URL(`${this.baseUrl}/v2/api`);
     url.searchParams.set('chain_id', String(chainId));
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-    const res = await this.request(url, `Etherscan ${chainId}/${params.action ?? '?'}`);
+    const res = await this.request(url, `Etherscan ${chainId}/${params.action ?? '?'}`, opts.timeoutMs);
     if (!res) return { data: null, status: 'error', detail: 'no answer' };
     if (res.status !== 200) return { data: null, status: 'error', detail: `HTTP ${res.status}` };
     let body: { status?: string; message?: string; result?: unknown };
@@ -142,7 +142,7 @@ export class BlockscoutClient {
     if (slot > now) await this.sleep(slot - now);
   }
 
-  private async request(url: URL, context: string): Promise<Response | null> {
+  private async request(url: URL, context: string, timeoutMs = this.timeoutMs): Promise<Response | null> {
     // One charge per logical request; a refused one is an error, never "nothing here".
     const route = url.pathname === '/v2/api' ? `etherscan:${url.searchParams.get('module')}.${url.searchParams.get('action')}` : url.pathname;
     if (this.ledger && !this.ledger.charge(url.pathname, route)) {
@@ -157,7 +157,7 @@ export class BlockscoutClient {
       try {
         res = await this.fetchFn(url, {
           headers: { Accept: 'application/json' },
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal: AbortSignal.timeout(timeoutMs),
         });
       } catch (err) {
         log(`${context}: network error (attempt ${attempt}/${this.attempts}): ${errName(err)}`);
