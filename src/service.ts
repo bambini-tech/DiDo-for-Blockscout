@@ -63,6 +63,8 @@ export interface ServiceOptions {
   tokenTtlMs?: number;
   clusterTtlMs?: number;
   traceTtlMs?: number;
+  /** How long the map waits for the token reads once the native traces are done. */
+  tokenGraceMs?: number;
   /** How long the map waits for the launch read once the traces are done. */
   launchGraceMs?: number;
   /** Oldest transactions read per trace. Blockscout bills per request, not per row: a deep window is free. */
@@ -71,6 +73,8 @@ export interface ServiceOptions {
 }
 
 const MINUTE = 60_000;
+/** Token movements read per holder: the first ones are who sent it the supply. */
+const TOKEN_WINDOW = 30;
 const DAY = 24 * 60 * MINUTE;
 
 export class Service {
@@ -88,6 +92,7 @@ export class Service {
   private readonly concurrency: number;
   private readonly traceWindow: number;
   private readonly launchGraceMs: number;
+  private readonly tokenGraceMs: number;
 
   constructor(private readonly client: BlockscoutClient, private readonly opts: ServiceOptions = {}) {
     this.tokens = new TtlCache(opts.tokenTtlMs ?? MINUTE);
@@ -98,6 +103,7 @@ export class Service {
     this.concurrency = opts.concurrency ?? 6;
     this.traceWindow = opts.traceWindow ?? 100;
     this.launchGraceMs = opts.launchGraceMs ?? 3_000;
+    this.tokenGraceMs = opts.tokenGraceMs ?? 8_000;
   }
 
   cachedToken(chain: Chain, address: string): TokenResponse | undefined {
@@ -169,7 +175,7 @@ export class Service {
     const deployerP = this.creator(chain, address);
     const launchP = deployerP.then((d) => this.launch(chain, address, d.creationTx, pools, new Set([...burn, address, ...(d.address ? [d.address] : [])])));
     prog.phase = 'funders';
-    const [deployer, traces] = await Promise.all([deployerP, this.traceHolders(chain, address, holders, prog)]);
+    const [deployer, { traces, tokensComplete }] = await Promise.all([deployerP, this.traceHolders(chain, address, holders, prog)]);
     // The launch read runs alongside the traces. The map never waits long on
     // it: past a short grace it goes out without bundles and snipers ("not
     // read yet"), the read finishes in the background and is cached, and the
@@ -239,7 +245,7 @@ export class Service {
     };
     // A result with failed traces or an unread deployer is served, never cached.
     // ... nor one with a sender we could not identify: the next visit checks it again.
-    if (!body.partial && analysis.stats.failed === 0 && deployer.status !== 'error' && launch.status !== 'error' && !launch.pending && checkedSenders.size === shared.length) {
+    if (!body.partial && analysis.stats.failed === 0 && deployer.status !== 'error' && launch.status !== 'error' && !launch.pending && tokensComplete && checkedSenders.size === shared.length) {
       this.clusterCache.set(`${chain.key}:${address}`, body);
     }
     return { kind: 'ok', body };
@@ -268,35 +274,61 @@ export class Service {
     return launch;
   }
 
-  private async traceHolders(chain: Chain, token: string, holders: Holder[], prog?: Progress): Promise<Map<string, FundingTrace>> {
+  /**
+   * Native traces and token movements for the traced holders, in two pools.
+   *
+   * They are not paired per holder: a token-filtered history (`tokentx`) is a
+   * slow query on Blockscout (6-17 s on a busy token, ~1 s for `txlist`), and
+   * pairing them made every holder wait for its slowest read. The native pool
+   * sets the pace; the token pool runs wider beside it. Once the native traces
+   * are in, the token reads get TOKEN_GRACE_MS more; any still running finish
+   * in the background and are cached, and the map that went out without them
+   * is not cached, so the next look has every token link.
+   */
+  private async traceHolders(chain: Chain, token: string, holders: Holder[], prog?: Progress): Promise<{ traces: Map<string, FundingTrace>; tokensComplete: boolean }> {
     // Named contracts (routers, lockers, vaults) are never linked, so never
     // traced; a contract that is a wallet (a Safe, a multisig) is.
     const targets = holders.filter((h) => !(h.isContract && h.name) || labelsOf(h.name, h.tags).wallet).slice(0, this.traceLimit);
-    const out = new Map<string, FundingTrace>();
+    const native = new Map<string, FundingTrace>();
+    const moves = new Map<string, { status: Status; flows: Flow[]; error?: string }>();
     if (prog) prog.funders.total = targets.length;
-    await mapLimit(targets, this.concurrency, async (h) => {
+    const nativeAll = mapLimit(targets, this.concurrency, async (h) => {
       const key = `${chain.key}:${h.address}`;
-      const tkey = `${chain.key}:${token}:${h.address}`;
-      // Native history and the token's own movements, side by side.
-      const [native, moves] = await Promise.all([
-        this.traces.get(key) ?? traceFunding(this.client, chain.chainId, h.address, this.traceWindow).then((t) => {
-          // A full window is the wallet's oldest history: it cannot change, so it is kept a day.
-          if (t.status === 'ok') this.traces.set(key, t, t.windowFull ? DAY : undefined);
-          return t;
-        }),
-        this.tokenTraces.get(tkey) ?? traceTokenFlows(this.client, chain.chainId, h.address, token, this.traceWindow).then((m) => {
-          if (m.status === 'ok') this.tokenTraces.set(tkey, m, m.flows.length >= this.traceWindow ? DAY : undefined);
-          return m;
-        }),
-      ]);
-      const t: FundingTrace = moves.status === 'ok' ? { ...native, tokenFlows: moves.flows } : { ...native, ...(moves.error ? { tokenError: moves.error } : {}) };
-      out.set(h.address, t);
+      let t = this.traces.get(key);
+      if (!t) {
+        t = await traceFunding(this.client, chain.chainId, h.address, this.traceWindow);
+        // A full window is the wallet's oldest history: it cannot change, so it is kept a day.
+        if (t.status === 'ok') this.traces.set(key, t, t.windowFull ? DAY : undefined);
+      }
+      native.set(h.address, t);
       if (prog) {
         prog.funders.done++;
         prog.pct = Math.round(5 + (85 * prog.funders.done) / Math.max(1, prog.funders.total));
       }
     });
-    return out;
+    const tokenAll = mapLimit(targets, this.concurrency * 2, async (h) => {
+      const tkey = `${chain.key}:${token}:${h.address}`;
+      let m = this.tokenTraces.get(tkey);
+      if (!m) {
+        m = await traceTokenFlows(this.client, chain.chainId, h.address, token, TOKEN_WINDOW);
+        if (m.status === 'ok') this.tokenTraces.set(tkey, m, m.flows.length >= TOKEN_WINDOW ? DAY : undefined);
+      }
+      moves.set(h.address, m);
+    });
+    await nativeAll;
+    let timer: NodeJS.Timeout | undefined;
+    const tokensComplete = await Promise.race([
+      tokenAll.then(() => true),
+      new Promise<boolean>((r) => { timer = setTimeout(() => r(false), this.tokenGraceMs); }),
+    ]).finally(() => clearTimeout(timer));
+    void tokenAll.catch(() => undefined);
+    const traces = new Map<string, FundingTrace>();
+    for (const h of targets) {
+      const t = native.get(h.address)!;
+      const m = moves.get(h.address);
+      traces.set(h.address, !m ? t : m.status === 'ok' ? { ...t, tokenFlows: m.flows } : { ...t, ...(m.error ? { tokenError: m.error } : {}) });
+    }
+    return { traces, tokensComplete };
   }
 
   /** Blockscout's name, tags and contract flag for an address; cached a day; null when it could not be read. */

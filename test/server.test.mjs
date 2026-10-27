@@ -150,3 +150,25 @@ test('a slow launch read does not hold the map: it goes out without it, uncached
   assert.equal(r.body.launch.pending, true, 'the map went out before the launch read finished');
   assert.equal(svc.cachedClusters(chainByKey('base'), T), undefined, 'and is not cached: the next look has the launch');
 });
+
+test('slow token reads do not hold the map: it goes out on the native traces, uncached', async () => {
+  const { Service } = await import('../dist/service.js');
+  const { chainByKey } = await import('../dist/chains.js');
+  const T = '0x' + 'a'.repeat(40), H1 = '0x' + '1'.repeat(40), H2 = '0x' + '2'.repeat(40);
+  const f = scriptedFetch([
+    [(u) => u.pathname === '/v2/api', json({ status: '0', message: 'No transactions found', result: [] })],
+    [`/tokens/${T}/holders`, json({ items: [{ address: { hash: H1, is_contract: false }, value: '500' }, { address: { hash: H2, is_contract: false }, value: '500' }] })],
+    [`/tokens/${T}`, json({ address_hash: T, symbol: 'T', name: 'T', decimals: '0', total_supply: '1000', holders_count: '2' })],
+    [`/addresses/${T}`, json({ creator_address_hash: null })],
+  ]);
+  const slowTokens = async (url) => {
+    if (new URL(String(url)).searchParams.get('action') === 'tokentx') await new Promise((r) => setTimeout(r, 300));
+    return f(url);
+  };
+  const svc = new Service(makeClient(slowTokens), { tokenGraceMs: 20 });
+  const t0 = Date.now();
+  const r = await svc.clusters(chainByKey('base'), T, null);
+  assert.equal(r.kind, 'ok');
+  assert.ok(Date.now() - t0 < 250, 'the map did not wait for the token reads');
+  assert.equal(svc.cachedClusters(chainByKey('base'), T), undefined, 'not cached: the next look has the token links');
+});
