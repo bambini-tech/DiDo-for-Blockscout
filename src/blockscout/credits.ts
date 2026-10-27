@@ -29,7 +29,7 @@ export interface Plan {
 export const PLANS: Record<Plan['name'], Plan> = {
   // 90% of the plan's request rate: headroom for jitter, one process, one key.
   // In flight: the live API answers in ~2 s, so ~30 at once keep a 13.5/s gate full.
-  builder: { name: 'builder', rps: 13.5, monthlyCredits: 100_000_000, dailyBrake: Math.floor((100_000_000 / 31) * 2), traceLimit: 100, concurrency: 32 },
+  builder: { name: 'builder', rps: 13.5, monthlyCredits: 100_000_000, dailyBrake: Math.floor((100_000_000 / 31) * 2), traceLimit: 100, concurrency: 48 },
   free: { name: 'free', rps: 4.5, monthlyCredits: 0, dailyBrake: 90_000, traceLimit: 50, concurrency: 6 },
 };
 
