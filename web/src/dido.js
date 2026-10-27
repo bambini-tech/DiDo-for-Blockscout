@@ -4613,7 +4613,10 @@
     }
     let boardBusy = false;
     async function readBoard() {
-      if (boardBusy || ((board.status === 'ok' || board.status === 'off') && Date.now() - board.ts < BOARD_TTL)) return;
+      /* A round still running (or none in yet) is asked about every 45 s: its
+         trending and garden fill in as it reads. A complete board, every 10 min. */
+      const ttl = board.status === 'off' || (board.doc && board.doc.partial) ? 45000 : BOARD_TTL;
+      if (boardBusy || ((board.status === 'ok' || board.status === 'off') && Date.now() - board.ts < ttl)) return;
       boardBusy = true;
       if (board.status === 'idle') { board.status = 'loading'; if (shown) render(); }
       await configReady;
@@ -5039,7 +5042,12 @@
       els.homeKey.innerHTML = keyHtml();
       /* the board as cards, kept in place when only the numbers move */
       const keep = els.homeShelves.scrollTop;
-      els.homeShelves.innerHTML = boardShelves() || noteCard('the entry board has no read to show right now. trending and your tokens stay around the stage.');
+      els.homeShelves.innerHTML = boardShelves() || noteCard(
+        board.doc && board.doc.partial
+          ? 'the entry board is reading the market right now: trending and the garden fill in as it reads, and the picks land when the round is done (about 20 minutes after a restart).'
+          : board.status === 'off'
+            ? 'the entry board is starting its first read of the market (about 20 minutes after a restart). trending and the garden fill in as it reads.'
+            : 'the entry board has no read to show right now. trending and your tokens stay around the stage.');
       els.homeShelves.scrollTop = keep;
       els.homeShelves.querySelectorAll('.dd-hc').forEach((c, i) => c.style.setProperty('--i', String(Math.min(i, 12))));
       const tOld = els.homeTrend.querySelector('.dd-strip__row'), tLeft = tOld ? tOld.scrollLeft : 0;

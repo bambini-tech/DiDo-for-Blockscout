@@ -31,6 +31,8 @@ export interface Launch {
   launchTs: number | null;
   bundles: Buy[];
   snipers: Buy[];
+  /** Still being read when the map went out: it lands on the next look. */
+  pending?: true;
 }
 
 interface RawLog {
@@ -43,7 +45,18 @@ interface RawLog {
 export interface LaunchOptions {
   sniperWindowSec?: number;
   maxPages?: number;
+  /** Blocks the first read covers after creation; each later window is 4x the last. */
+  windowBlocks?: number;
 }
+
+/**
+ * The launch is read in block windows after creation, never "to latest": a
+ * busy token's whole Transfer history is a query Blockscout can take a minute
+ * on (timing out), where a 50,000-block window answers in seconds. A window
+ * with no pool buy in it moves on to the next, four times wider: 50k, 200k,
+ * 800k blocks -- about a week on Ethereum, three days on Arbitrum.
+ */
+const WINDOW_BLOCKS = 50_000;
 
 export async function readLaunch(
   client: BlockscoutClient,
@@ -55,11 +68,13 @@ export async function readLaunch(
   opts: LaunchOptions = {},
 ): Promise<Launch> {
   const windowSec = opts.sniperWindowSec ?? 60;
-  const maxPages = opts.maxPages ?? 3;
+  const maxPages = opts.maxPages ?? 4;
+  let width = opts.windowBlocks ?? WINDOW_BLOCKS;
   const none: Launch = { status: 'ok', measured: false, launchBlock: null, launchTs: null, bundles: [], snipers: [] };
   if (!pools.size) return none;
 
   let from = fromBlock;
+  let to = fromBlock + width;
   let launch: { block: number; ts: number | null } | null = null;
   const bundles = new Map<string, Buy>();
   const snipers = new Map<string, Buy>();
@@ -67,7 +82,7 @@ export async function readLaunch(
 
   for (let page = 0; page < maxPages; page++) {
     const res = await client.etherscan<RawLog[]>(chainId, {
-      module: 'logs', action: 'getLogs', address: token, topic0: TRANSFER_TOPIC, fromBlock: from, toBlock: 'latest',
+      module: 'logs', action: 'getLogs', address: token, topic0: TRANSFER_TOPIC, fromBlock: from, toBlock: to,
     });
     if (res.status !== 'ok' || !Array.isArray(res.data)) return { ...none, status: 'error' };
     const logs = res.data;
@@ -91,8 +106,18 @@ export async function readLaunch(
         break;
       }
     }
-    if (done || logs.length < 1000) break;
-    from = toNum(logs[logs.length - 1]?.blockNumber) ?? from;
+    if (done) break;
+    if (logs.length >= 1000) {
+      // A full page: the same window goes on from the last block read.
+      from = toNum(logs[logs.length - 1]?.blockNumber) ?? from;
+    } else if (launch) {
+      break; // the window ran out after the launch: every early buy is read
+    } else {
+      // No pool buy in this window yet: the next one, wider.
+      from = to + 1;
+      width *= 4;
+      to = from + width;
+    }
   }
   if (!launch) return none;
   return {

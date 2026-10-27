@@ -62,3 +62,16 @@ test('topicAddress takes the last 20 bytes, lowercased', () => {
   assert.equal(topicAddress('0x000000000000000000000000ABCDEF0000000000000000000000000000000001'), '0xabcdef0000000000000000000000000000000001');
   assert.equal(topicAddress(null), null);
 });
+
+test('the launch is read in widening block windows, never to "latest"', async () => {
+  const { readLaunch: read } = await import('../dist/blockscout/launch.js');
+  const seen = [];
+  const f = async (url) => {
+    const u = new URL(String(url));
+    seen.push([u.searchParams.get('fromBlock'), u.searchParams.get('toBlock')]);
+    return new Response(JSON.stringify({ status: '0', message: 'No records found', result: [] }), { status: 200 });
+  };
+  const r = await read(makeClient(f), 1, '0x' + 'a'.repeat(40), 100, new Set(['0x' + 'b'.repeat(40)]), new Set());
+  assert.equal(r.measured, false);
+  assert.deepEqual(seen, [['100', '50100'], ['50101', '250101'], ['250102', '1050102'], ['1050103', '4250103']]);
+});

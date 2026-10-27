@@ -91,42 +91,52 @@ export async function getTokenMeta(
 /**
  * Top holders, keyset-paginated (50 per page). Stops early at the last page.
  * A failure after the first page keeps what was read and reports `partial`.
+ *
+ * `meta` can still be on its way (`{ address, later }`): the pages are read
+ * side by side with the token's own row, and shares are worked out once both
+ * are in, so a first look costs one round trip less.
  */
 export async function getTokenHolders(
   client: BlockscoutClient,
   chainId: number,
-  meta: TokenMeta,
+  meta: TokenMeta | { address: string; later: Promise<TokenMeta | null> },
   pages = 2,
 ): Promise<{ holders: Holder[]; status: Status; partial: boolean }> {
-  const holders: Holder[] = [];
-  const supply = BigInt(meta.totalSupply || '0');
+  const items: NonNullable<RawHolderPage['items']> = [];
   let params: Record<string, string | number> = {};
+  let partial = false;
   for (let page = 0; page < Math.max(1, pages); page++) {
     const { data, status } = await client.rest<RawHolderPage>(chainId, `tokens/${meta.address}/holders`, params);
     if (status !== 'ok' || !data) {
-      if (page === 0) return { holders, status: status === 'ok' ? 'error' : status, partial: false };
-      return { holders, status: 'ok', partial: true };
+      if (page === 0) return { holders: [], status: status === 'ok' ? 'error' : status, partial: false };
+      partial = true;
+      break;
     }
-    for (const item of data.items ?? []) {
-      const hash = item.address?.hash;
-      if (!hash) continue;
-      const raw = toBigIntString(item.value);
-      holders.push({
-        address: hash.toLowerCase(),
-        raw,
-        balance: scale(raw, meta.decimals),
-        share: supply > 0n ? Number((BigInt(raw) * 1_000_000n) / supply) / 10_000 : null,
-        isContract: Boolean(item.address?.is_contract),
-        name: item.address?.name ?? null,
-        tags: (item.address?.metadata?.tags ?? [])
-          .map((t) => (typeof t === 'string' ? t : t.name ?? t.label ?? ''))
-          .filter((t): t is string => Boolean(t)),
-      });
-    }
+    items.push(...(data.items ?? []));
     if (!data.next_page_params) break;
     params = data.next_page_params;
   }
-  return { holders, status: 'ok', partial: false };
+  const m = 'later' in meta ? await meta.later : meta;
+  if (!m) return { holders: [], status: 'error', partial: false };
+  const supply = BigInt(m.totalSupply || '0');
+  const holders: Holder[] = [];
+  for (const item of items) {
+    const hash = item.address?.hash;
+    if (!hash) continue;
+    const raw = toBigIntString(item.value);
+    holders.push({
+      address: hash.toLowerCase(),
+      raw,
+      balance: scale(raw, m.decimals),
+      share: supply > 0n ? Number((BigInt(raw) * 1_000_000n) / supply) / 10_000 : null,
+      isContract: Boolean(item.address?.is_contract),
+      name: item.address?.name ?? null,
+      tags: (item.address?.metadata?.tags ?? [])
+        .map((t) => (typeof t === 'string' ? t : t.name ?? t.label ?? ''))
+        .filter((t): t is string => Boolean(t)),
+    });
+  }
+  return { holders, status: 'ok', partial };
 }
 
 function toInt(v: unknown): number | null {

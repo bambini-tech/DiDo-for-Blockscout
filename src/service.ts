@@ -63,6 +63,8 @@ export interface ServiceOptions {
   tokenTtlMs?: number;
   clusterTtlMs?: number;
   traceTtlMs?: number;
+  /** How long the map waits for the launch read once the traces are done. */
+  launchGraceMs?: number;
   /** Oldest transactions read per trace. Blockscout bills per request, not per row: a deep window is free. */
   traceWindow?: number;
   link?: Partial<LinkOptions>;
@@ -85,6 +87,7 @@ export class Service {
   private readonly traceLimit: number;
   private readonly concurrency: number;
   private readonly traceWindow: number;
+  private readonly launchGraceMs: number;
 
   constructor(private readonly client: BlockscoutClient, private readonly opts: ServiceOptions = {}) {
     this.tokens = new TtlCache(opts.tokenTtlMs ?? MINUTE);
@@ -94,6 +97,7 @@ export class Service {
     this.traceLimit = opts.traceLimit ?? 50;
     this.concurrency = opts.concurrency ?? 6;
     this.traceWindow = opts.traceWindow ?? 100;
+    this.launchGraceMs = opts.launchGraceMs ?? 3_000;
   }
 
   cachedToken(chain: Chain, address: string): TokenResponse | undefined {
@@ -108,9 +112,15 @@ export class Service {
     return this.once(`token:${chain.key}:${address}`, async () => {
       const hit = this.cachedToken(chain, address);
       if (hit) return { kind: 'ok', body: hit };
-      const { meta, status } = await getTokenMeta(this.client, chain.chainId, address);
-      if (!meta) return { kind: status === 'absent' ? 'absent' : 'error' };
-      const holders = await getTokenHolders(this.client, chain.chainId, meta);
+      // The token's row and its holder pages, side by side: one round trip less.
+      const metaP = getTokenMeta(this.client, chain.chainId, address);
+      const holdersP = getTokenHolders(this.client, chain.chainId, { address, later: metaP.then((r) => r.meta) });
+      const { meta, status } = await metaP;
+      if (!meta) {
+        void holdersP.catch(() => undefined);
+        return { kind: status === 'absent' ? 'absent' : 'error' };
+      }
+      const holders = await holdersP;
       if (holders.status !== 'ok') return { kind: 'error' };
       const body: TokenResponse = {
         chain: { key: chain.key, name: chain.name, chainId: chain.chainId, explorer: chain.explorer, native: chain.native },
@@ -159,7 +169,17 @@ export class Service {
     const deployerP = this.creator(chain, address);
     const launchP = deployerP.then((d) => this.launch(chain, address, d.creationTx, pools, new Set([...burn, address, ...(d.address ? [d.address] : [])])));
     prog.phase = 'funders';
-    const [deployer, traces, launch] = await Promise.all([deployerP, this.traceHolders(chain, address, holders, prog), launchP]);
+    const [deployer, traces] = await Promise.all([deployerP, this.traceHolders(chain, address, holders, prog)]);
+    // The launch read runs alongside the traces. The map never waits long on
+    // it: past a short grace it goes out without bundles and snipers ("not
+    // read yet"), the read finishes in the background and is cached, and the
+    // next look has it.
+    let graceTimer: NodeJS.Timeout | undefined;
+    const launch = (await Promise.race([
+      launchP,
+      new Promise<null>((r) => { graceTimer = setTimeout(() => r(null), this.launchGraceMs); }),
+    ]).finally(() => clearTimeout(graceTimer))) ?? { status: 'ok' as const, measured: false, launchBlock: null, launchTs: null, bundles: [], snipers: [], pending: true as const };
+    void launchP.catch(() => undefined);
     prog.phase = 'linking';
     prog.pct = 92;
 
@@ -219,7 +239,7 @@ export class Service {
     };
     // A result with failed traces or an unread deployer is served, never cached.
     // ... nor one with a sender we could not identify: the next visit checks it again.
-    if (!body.partial && analysis.stats.failed === 0 && deployer.status !== 'error' && launch.status !== 'error' && checkedSenders.size === shared.length) {
+    if (!body.partial && analysis.stats.failed === 0 && deployer.status !== 'error' && launch.status !== 'error' && !launch.pending && checkedSenders.size === shared.length) {
       this.clusterCache.set(`${chain.key}:${address}`, body);
     }
     return { kind: 'ok', body };
